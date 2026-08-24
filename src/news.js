@@ -282,7 +282,7 @@ const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255
 export function leadArtwork(art) {
   const { palette, seed, label } = art;
   const table = (i) => `${channel(palette.dark, i)} ${channel(palette.light, i)}`;
-  return `<svg class="art" viewBox="0 0 1536 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
+  return `<svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
           <feColorMatrix type="saturate" values="0"/>
@@ -305,20 +305,20 @@ export function leadArtwork(art) {
           <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="${seed}"/>
           <feColorMatrix type="saturate" values="0"/>
         </filter>
-        <clipPath id="field"><rect x="768" y="0" width="768" height="620"/></clipPath>
+        <clipPath id="field"><rect x="768" y="0" width="768" height="1152"/></clipPath>
       </defs>
 
-      <rect width="1536" height="620" fill="#000"/>
+      <rect width="1536" height="1152" fill="#000"/>
 
       <g clip-path="url(#field)">
-        <rect x="768" y="0" width="768" height="620" fill="${palette.field}"/>
-        <rect x="700" y="-140" width="920" height="900" fill="${palette.wash}" filter="url(#mottle)"/>
+        <rect x="768" y="0" width="768" height="1152" fill="${palette.field}"/>
+        <rect x="700" y="-160" width="920" height="1480" fill="${palette.wash}" filter="url(#mottle)"/>
       </g>
 
-      <image href="${art.href}" x="150" y="96" width="470" height="428"
+      <image href="${art.href}" x="94" y="286" width="580" height="580"
              preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
 
-      <rect width="1536" height="620" filter="url(#grain)" opacity="0.55"
+      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.55"
             style="mix-blend-mode:overlay"/>
     </svg>`;
 }
@@ -347,7 +347,7 @@ export function render(headlines, at, art, footer) {
   };
 
   const [top, ...rest] = headlines;
-  const banner = art ? `    <figure class="banner">\n      ${leadArtwork(art)}\n    </figure>\n` : '';
+  const banner = art ? `      <figure class="banner">\n        ${leadArtwork(art)}\n      </figure>` : '';
   const leadStory = story(top, ' story--lead');
   const stories = rest.map((h) => story(h)).join('\n');
 
@@ -377,7 +377,9 @@ export function render(headlines, at, art, footer) {
     -webkit-font-smoothing: antialiased;
   }
 
-  main { width: 100%; max-width: 38rem; }
+  /* min-width:0 is the standard guard for a flex item holding a
+     replaced element with an intrinsic aspect ratio. */
+  main { width: 100%; max-width: 38rem; min-width: 0; }
 
   .meta {
     margin: 0;
@@ -393,7 +395,7 @@ export function render(headlines, at, art, footer) {
   }
 
   .banner { margin: 0 0 clamp(1.4rem, 3.5vw, 2rem); }
-  .banner .art { display: block; width: 100%; height: auto; }
+  .banner .art { display: block; width: 100%; max-width: 100%; height: auto; }
 
 
   .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
@@ -425,16 +427,44 @@ export function render(headlines, at, art, footer) {
     margin-top: clamp(2.5rem, 7vw, 4rem);
     font-size: 0.62rem;
   }
+
+  /* Desktop: artwork takes the larger left column, headlines sit beside it.
+     Below this width everything stacks and stays centred. */
+  @media (min-width: 62rem) {
+    main { max-width: 70rem; }
+
+    .page {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: clamp(2.5rem, 4vw, 4rem);
+      /* Tops flush: the text column is taller, so centring left the
+         artwork floating oddly low against the lead headline. */
+      align-items: start;
+    }
+
+    .banner { margin: 0; }
+
+    .column .story, .column .meta { text-align: left; }
+    .story { padding: clamp(1.1rem, 2vw, 1.5rem) 0; }
+    .story h2 { font-size: clamp(1.15rem, 1.6vw, 1.4rem); }
+
+    .story--lead { padding-top: 0; padding-bottom: clamp(1.4rem, 2.4vw, 2rem); }
+    .story--lead h2 { font-size: clamp(1.6rem, 2.9vw, 2.3rem); }
+  }
 </style>
 </head>
 <body>
   <main>
     <p class="meta dateline">${escape(dateline)} &middot; ${escape(time)}</p>
 
+    <div class="page">
 ${banner}
+      <div class="column">
 ${leadStory}
 
 ${stories}
+      </div>
+    </div>
 
     <footer class="meta">${escape(footer)}</footer>
   </main>
