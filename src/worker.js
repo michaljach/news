@@ -13,7 +13,6 @@ import {
   imagePrompt,
   leadArtwork,
   render,
-  PALETTES,
 } from './news.js';
 
 const PAGE_KEY = 'page:v1';
@@ -99,7 +98,6 @@ async function buildAndStore(env) {
 
 async function makeArtwork(env, headline) {
   const slot = Math.floor(Date.now() / 7_200_000);
-  const palette = PALETTES[slot % PALETTES.length];
   const concept = await conceptFor(env, headline);
 
   try {
@@ -113,7 +111,6 @@ async function makeArtwork(env, headline) {
 
     return {
       href: `/lead.jpg?v=${slot}`,
-      palette,
       seed: slot % 100,
       label: `Editorial illustration: ${concept}`,
     };

@@ -18,7 +18,6 @@ import {
   fallbackConcept,
   imagePrompt,
   render,
-  PALETTES,
   UA,
 } from './src/news.js';
 
@@ -93,7 +92,6 @@ async function generateLeadImage(headline) {
 
     return {
       href: IMAGE_FILE,
-      palette: PALETTES[slot % PALETTES.length],
       seed: slot % 100,
       label: `Editorial illustration: ${concept}`,
     };

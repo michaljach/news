@@ -36,10 +36,7 @@
     text-transform: uppercase;
   }
 
-  .dateline {
-    margin-bottom: clamp(2.5rem, 7vw, 4rem);
-    font-size: 0.68rem;
-  }
+
 
   .banner { margin: 0 0 clamp(1.4rem, 3.5vw, 2rem); }
   .banner .art { display: block; width: 100%; max-width: 100%; height: auto; }
@@ -74,6 +71,22 @@
     margin-top: clamp(2.5rem, 7vw, 4rem);
     font-size: 0.62rem;
   }
+  footer p { margin: 0; }
+  footer .meta + .meta { margin-top: 0.5rem; }
+  footer .about { margin-top: 1.2rem; }
+
+  .about {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 34rem;
+    font-family: ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.74rem;
+    line-height: 1.55;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: center;
+    color: #767676;
+  }
 
   /* Desktop: artwork takes the larger left column, headlines sit beside it.
      Below this width everything stacks and stays centred. */
@@ -102,47 +115,28 @@
 </head>
 <body>
   <main>
-    <p class="meta dateline">Monday, August 24, 2026 &middot; 5:13 PM</p>
-
     <div class="page">
       <figure class="banner">
-        <svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A lone, charred wooden chair half‑submerged in a river of orange‑smoke‑colored water">
+        <svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A lone charred wooden rocking chair perched on a river of orange flames">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
           <feColorMatrix type="saturate" values="0"/>
           <feComponentTransfer>
-            <feFuncR type="table" tableValues="0.486 0.941"/>
-            <feFuncG type="table" tableValues="0.106 0.867"/>
-            <feFuncB type="table" tableValues="0.173 0.882"/>
+            <feFuncR type="table" tableValues="0.557 0.957"/>
+            <feFuncG type="table" tableValues="0.122 0.890"/>
+            <feFuncB type="table" tableValues="0.184 0.886"/>
           </feComponentTransfer>
-        </filter>
-        <filter id="mottle" x="-30%" y="-30%" width="160%" height="160%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="75"/>
-          <feColorMatrix type="luminanceToAlpha"/>
-          <feComponentTransfer result="mask">
-            <feFuncA type="discrete" tableValues="0 0 0 1 1"/>
-          </feComponentTransfer>
-          <feFlood flood-color="#f1f1d6" result="wash"/>
-          <feComposite in="wash" in2="mask" operator="in"/>
         </filter>
         <filter id="grain" x="0" y="0" width="100%" height="100%">
           <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="75"/>
           <feColorMatrix type="saturate" values="0"/>
         </filter>
-        <clipPath id="field"><rect x="768" y="0" width="768" height="1152"/></clipPath>
       </defs>
 
-      <rect width="1536" height="1152" fill="#000"/>
-
-      <g clip-path="url(#field)">
-        <rect x="768" y="0" width="768" height="1152" fill="#b5b539"/>
-        <rect x="700" y="-160" width="920" height="1480" fill="#f1f1d6" filter="url(#mottle)"/>
-      </g>
-
-      <image href="lead.jpg" x="94" y="286" width="580" height="580"
+      <rect width="1536" height="1152" fill="#f4e3e2"/>
+      <image href="lead.jpg" x="0" y="0" width="1536" height="1152"
              preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
-
-      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.55"
+      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.6"
             style="mix-blend-mode:overlay"/>
     </svg>
       </figure>
@@ -171,7 +165,11 @@
       </div>
     </div>
 
-    <footer class="meta">6 feeds · ranked by cross-outlet coverage</footer>
+    <footer>
+      <p class="meta">Monday, August 24, 2026 &middot; 5:19 PM</p>
+      <p class="meta">6 feeds · ranked by cross-outlet coverage</p>
+      <p class="about">Every two hours this page pulls six publisher feeds, ranks the stories by how many independent outlets ran each one, and generates a banner for whichever leads.</p>
+    </footer>
   </main>
 </body>
 </html>

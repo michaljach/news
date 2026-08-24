@@ -8,6 +8,10 @@ export const COUNT = 5;
 export const FEED_TIMEOUT_MS = 20_000;
 export const TIMEZONE = 'Europe/Warsaw';
 
+export const ABOUT =
+  'Every two hours this page pulls six publisher feeds, ranks the stories by how ' +
+  'many independent outlets ran each one, and generates a banner for whichever leads.';
+
 
 export const UA = 'Mozilla/5.0 (compatible; news-page/1.0)';
 
@@ -195,12 +199,9 @@ export function selectTopStories(items) {
 // Two saturated accents against pure black, rotated so consecutive pulls do not
 // look identical. Index is derived from the clock, not random, so a rebuild of
 // the same hour reproduces the same artwork.
-export const PALETTES = [
-  { dark: '#2f7d32', light: '#e2f1e3', field: '#e8563f', wash: '#fbe3dc' },
-  { dark: '#2a5fc4', light: '#e4ecfc', field: '#e8a33f', wash: '#fdf0d9' },
-  { dark: '#127f86', light: '#ddf0f1', field: '#d95f2b', wash: '#fbe4d6' },
-  { dark: '#7c1b2c', light: '#f0dde1', field: '#b5b539', wash: '#f1f1d6' },
-];
+// One red duotone. The rotation that used to live here paired a photo tone with
+// the abstract colour field; that field is gone, so there is nothing to pair.
+export const DUOTONE = { dark: '#8e1f2f', light: '#f4e3e2' };
 
 // Used when no model is reachable. Crude next to a generated metaphor, but it
 // keeps the artwork tied to the story instead of falling back to a generic blob.
@@ -280,8 +281,8 @@ const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255
 // bites only on the colour field and the photograph, which is what the printed
 // reference does. All native SVG filters, so no image library is involved.
 export function leadArtwork(art) {
-  const { palette, seed, label } = art;
-  const table = (i) => `${channel(palette.dark, i)} ${channel(palette.light, i)}`;
+  const { seed, label } = art;
+  const table = (i) => `${channel(DUOTONE.dark, i)} ${channel(DUOTONE.light, i)}`;
   return `<svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
@@ -292,33 +293,16 @@ export function leadArtwork(art) {
             <feFuncB type="table" tableValues="${table(2)}"/>
           </feComponentTransfer>
         </filter>
-        <filter id="mottle" x="-30%" y="-30%" width="160%" height="160%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="${seed}"/>
-          <feColorMatrix type="luminanceToAlpha"/>
-          <feComponentTransfer result="mask">
-            <feFuncA type="discrete" tableValues="0 0 0 1 1"/>
-          </feComponentTransfer>
-          <feFlood flood-color="${palette.wash}" result="wash"/>
-          <feComposite in="wash" in2="mask" operator="in"/>
-        </filter>
         <filter id="grain" x="0" y="0" width="100%" height="100%">
           <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="${seed}"/>
           <feColorMatrix type="saturate" values="0"/>
         </filter>
-        <clipPath id="field"><rect x="768" y="0" width="768" height="1152"/></clipPath>
       </defs>
 
-      <rect width="1536" height="1152" fill="#000"/>
-
-      <g clip-path="url(#field)">
-        <rect x="768" y="0" width="768" height="1152" fill="${palette.field}"/>
-        <rect x="700" y="-160" width="920" height="1480" fill="${palette.wash}" filter="url(#mottle)"/>
-      </g>
-
-      <image href="${art.href}" x="94" y="286" width="580" height="580"
+      <rect width="1536" height="1152" fill="${DUOTONE.light}"/>
+      <image href="${art.href}" x="0" y="0" width="1536" height="1152"
              preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
-
-      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.55"
+      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.6"
             style="mix-blend-mode:overlay"/>
     </svg>`;
 }
@@ -389,10 +373,7 @@ export function render(headlines, at, art, footer) {
     text-transform: uppercase;
   }
 
-  .dateline {
-    margin-bottom: clamp(2.5rem, 7vw, 4rem);
-    font-size: 0.68rem;
-  }
+
 
   .banner { margin: 0 0 clamp(1.4rem, 3.5vw, 2rem); }
   .banner .art { display: block; width: 100%; max-width: 100%; height: auto; }
@@ -427,6 +408,22 @@ export function render(headlines, at, art, footer) {
     margin-top: clamp(2.5rem, 7vw, 4rem);
     font-size: 0.62rem;
   }
+  footer p { margin: 0; }
+  footer .meta + .meta { margin-top: 0.5rem; }
+  footer .about { margin-top: 1.2rem; }
+
+  .about {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 34rem;
+    font-family: ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.74rem;
+    line-height: 1.55;
+    letter-spacing: 0;
+    text-transform: none;
+    text-align: center;
+    color: #767676;
+  }
 
   /* Desktop: artwork takes the larger left column, headlines sit beside it.
      Below this width everything stacks and stays centred. */
@@ -455,8 +452,6 @@ export function render(headlines, at, art, footer) {
 </head>
 <body>
   <main>
-    <p class="meta dateline">${escape(dateline)} &middot; ${escape(time)}</p>
-
     <div class="page">
 ${banner}
       <div class="column">
@@ -466,7 +461,11 @@ ${stories}
       </div>
     </div>
 
-    <footer class="meta">${escape(footer)}</footer>
+    <footer>
+      <p class="meta">${escape(dateline)} &middot; ${escape(time)}</p>
+      <p class="meta">${escape(footer)}</p>
+      <p class="about">${escape(ABOUT)}</p>
+    </footer>
   </main>
 </body>
 </html>

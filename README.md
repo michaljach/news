@@ -67,10 +67,9 @@ digests like "Up First" and "First Thing" never reach the page.
 
 ## The banner
 
-One artwork per pull, based solely on the top-ranked story, in a duotone
-editorial style: a small duotone photographic panel floating in flat black
-negative space, beside a grainy colour field with torn organic shapes. It runs
-as a wide banner (about 5:2) directly above the lead headline.
+One artwork per pull, based solely on the top-ranked story: a single red duotone
+photograph with heavy film grain, 4:3. On desktop it takes the wider left column
+with the headlines beside it; below 62rem it stacks above them.
 
 It is built in two stages, because a diffusion model will not reliably honour a
 compositional brief — asking one for the whole layout returned a soft blob with
@@ -82,12 +81,8 @@ none of the intended structure.
    one instead, so the artwork still relates to the story.
 2. **Subject photo.** The image model renders only that object — single subject,
    plain background, hard side lighting.
-3. **Composition.** Duotone mapping, film grain, the hard vertical split and the
-   organic colour field are applied deterministically with native SVG filters at
-   render time. No image library, and the layout is identical every run.
-
-The palette rotates through four pairs on a two-hour slot, so consecutive pulls
-do not look alike but a rebuild of the same hour reproduces the same artwork.
+3. **Treatment.** The red duotone mapping and film grain are applied
+   deterministically with native SVG filters at render time. No image library.
 
 Treating a symbolic object as a silkscreen is what keeps this editorial artwork
 rather than a fabricated news photo. The prompt rules out real people, faces,
