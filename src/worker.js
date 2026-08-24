@@ -14,6 +14,8 @@ import {
   leadArtwork,
   render,
   treat,
+  mergeItems,
+  dayKey,
 } from './news.js';
 
 const PAGE_KEY = 'page:v1';
@@ -82,18 +84,27 @@ export default {
 async function buildAndStore(env) {
   const at = new Date();
 
-  const { items, feedsUsed } = await fetchFeeds();
-  if (!items.length) throw new Error('no feed returned any stories');
+  const { items: fresh, feedsUsed } = await fetchFeeds();
+  if (!fresh.length) throw new Error('no feed returned any stories');
+
+  // Accumulate the day's stories so ranking sees every pull, not just this one.
+  const key = `day:${dayKey(at)}`;
+  const stored = (await env.NEWS.get(key, 'json')) ?? [];
+  const items = mergeItems(stored, fresh);
+  await env.NEWS.put(key, JSON.stringify(items), { expirationTtl: 60 * 60 * 48 });
 
   const picks = selectTopStories(items);
   if (!picks.length) throw new Error('no stories survived filtering');
 
   const art = await makeArtwork(env, picks[0].title);
-  const footer = `${feedsUsed} feeds · ranked by cross-outlet coverage`;
+  const footer = `${feedsUsed} feeds · ${items.length} stories today`;
   const html = render(picks, at, art, footer);
 
   await env.NEWS.put(PAGE_KEY, html);
-  console.log(`built ${picks.length} headlines from ${feedsUsed} feeds, ${html.length} bytes`);
+  console.log(
+    `built ${picks.length} of ${items.length} stories today ` +
+      `(+${fresh.length} this pull, ${feedsUsed} feeds), ${html.length} bytes`
+  );
   return html;
 }
 

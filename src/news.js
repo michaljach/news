@@ -11,8 +11,8 @@ export const FEED_TIMEOUT_MS = 20_000;
 export const TIMEZONE = 'Europe/Warsaw';
 
 export const ABOUT =
-  'Every two hours this page pulls six publisher feeds, ranks the stories by how ' +
-  'many independent outlets ran each one.';
+  'Every two hours this page pulls six publisher feeds and ranks the day\'s ' +
+  'stories by how many independent outlets ran each one.';
 
 export const AUTHOR = { handle: '@michaeljach', url: 'https://x.com/michaeljach' };
 export const SITE = 'https://news.jach.me';
@@ -139,6 +139,31 @@ const keyWords = (title) =>
       .filter((w) => w.length > 2 && !STOPWORDS.has(w))
   );
 
+// Stories accumulate over the day rather than being re-derived from each pull.
+// Corroboration is the ranking signal, and it only becomes meaningful with time:
+// a single snapshot catches one outlet on a story that six will have run by
+// evening.
+export const MAX_DAY_ITEMS = 900;
+
+// en-CA formats as YYYY-MM-DD. Bucketing by the display timezone means "today"
+// on the page matches the day the reader is actually having.
+export function dayKey(at, timeZone = TIMEZONE) {
+  return at.toLocaleDateString('en-CA', { timeZone });
+}
+
+// First sighting wins, so a story keeps the publication time it broke with
+// rather than being refreshed to the latest pull.
+export function mergeItems(existing, fresh) {
+  const byUrl = new Map();
+  for (const item of existing) {
+    if (item?.url && item.title) byUrl.set(item.url, item);
+  }
+  for (const item of fresh) {
+    if (item?.url && item.title && !byUrl.has(item.url)) byUrl.set(item.url, item);
+  }
+  return [...byUrl.values()].sort((a, b) => b.date - a.date).slice(0, MAX_DAY_ITEMS);
+}
+
 // Group headlines that describe the same event. The cluster signature stays
 // fixed to the first headline's words; letting it grow would make a cluster
 // match everything after a few merges.
@@ -176,11 +201,27 @@ function scoreCluster(c, newest) {
 }
 
 // Cap any one outlet so a prolific feed cannot fill the page on its own.
+export const DAY_WINDOW_HOURS = 30;
+
 export function selectTopStories(items) {
   const newest = Math.max(...items.map((i) => i.date).filter(Boolean), Date.now());
-  const ranked = cluster(items)
-    .map((c) => ({ ...c, score: scoreCluster(c, newest) }))
+
+  const scored = cluster(items)
+    .map((c) => ({
+      ...c,
+      score: scoreCluster(c, newest),
+      freshest: Math.max(...c.items.map((i) => i.date)),
+    }))
     .sort((a, b) => b.score - a.score);
+
+  // Feeds carry evergreen pieces days old, which are not "today" by any reading.
+  // Filtering the cluster rather than the article means a story that is still
+  // being covered keeps every outlet that ever ran it, while one that has gone
+  // quiet drops out. Falls back to the full set if a thin day would leave gaps.
+  const withinDay = scored.filter(
+    (c) => !c.freshest || (newest - c.freshest) / 3_600_000 <= DAY_WINDOW_HOURS
+  );
+  const ranked = withinDay.length >= COUNT ? withinDay : scored;
 
   const maxPerSource = Math.max(1, Math.ceil(COUNT / 2));
   const used = new Map();

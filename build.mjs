@@ -6,7 +6,7 @@
 // logic lives in src/news.js; only the image and concept providers differ, since
 // Workers AI is not reachable from here.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -19,6 +19,8 @@ import {
   imagePrompt,
   render,
   treat,
+  mergeItems,
+  dayKey,
   UA,
 } from './src/news.js';
 
@@ -107,15 +109,25 @@ async function generateLeadImage(headline) {
 async function main() {
   const at = new Date();
 
-  const { items, feedsUsed } = await fetchFeeds();
-  if (!items.length) throw new Error('no feed returned any stories');
-  console.log(`${items.length} stories from ${feedsUsed}/6 feeds`);
+  const { items: fresh, feedsUsed } = await fetchFeeds();
+  if (!fresh.length) throw new Error('no feed returned any stories');
+
+  // Production keeps the day's stories in KV; locally a file stands in for it,
+  // so preview ranks over the same accumulated window.
+  const cache = join(ROOT, '.cache', `${dayKey(at)}.json`);
+  mkdirSync(dirname(cache), { recursive: true });
+  const stored = existsSync(cache) ? JSON.parse(readFileSync(cache, 'utf8')) : [];
+  const items = mergeItems(stored, fresh);
+  writeFileSync(cache, JSON.stringify(items));
+  console.log(
+    `${items.length} stories today (+${fresh.length} this pull, ${feedsUsed}/6 feeds)`
+  );
 
   const picks = selectTopStories(items);
   if (!picks.length) throw new Error('no stories survived filtering');
 
   const art = await generateLeadImage(picks[0].title);
-  const footer = `${feedsUsed} feeds · ranked by cross-outlet coverage`;
+  const footer = `${feedsUsed} feeds · ${items.length} stories today`;
 
   const out = join(ROOT, 'index.html');
   writeFileSync(out, render(picks, at, art, footer));
