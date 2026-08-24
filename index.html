@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Latest News</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(2.5rem, 8vw, 6rem) 1.5rem;
+    background: #fff;
+    color: #000;
+    font-family: "Playfair Display", "Iowan Old Style", Georgia, "Times New Roman", serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main { width: 100%; max-width: 38rem; }
+
+  .meta {
+    margin: 0;
+    text-align: center;
+    font-family: ui-sans-serif, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .dateline {
+    margin-bottom: clamp(2.5rem, 7vw, 4rem);
+    font-size: 0.68rem;
+  }
+
+  .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
+  .story h2 {
+    margin: 0;
+    font-size: clamp(1.3rem, 3.4vw, 1.75rem);
+    font-weight: 500;
+    line-height: 1.3;
+    text-wrap: balance;
+  }
+  .story a { color: inherit; text-decoration: none; }
+  .story a:hover {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+  .story a:focus-visible { outline: 2px solid #000; outline-offset: 4px; }
+
+  .source { margin: 0.7rem 0 0; font-size: 0.66rem; }
+
+  footer {
+    margin-top: clamp(2.5rem, 7vw, 4rem);
+    font-size: 0.62rem;
+  }
+</style>
+</head>
+<body>
+  <main>
+    <p class="meta dateline">Monday, August 24, 2026 &middot; 2:21 PM</p>
+
+      <article class="story">
+        <h2><a href="https://www.cnn.com/2026/08/23/europe/zelensky-ukraine-russia-mobilization-intl" rel="noopener">Russia likely to mobilize at least 300,000 more troops to Ukraine war, Zelensky warns</a></h2>
+        <p class="meta source">CNN</p>
+      </article>
+      <article class="story">
+        <h2><a href="https://apnews.com/article/hawk-fire-reno-nevada-evacuations-aae2f4b77e2d4aa5678b365a2ee377e6" rel="noopener">Wildfire nears Reno, Nevada, with thousands ordered to evacuate</a></h2>
+        <p class="meta source">AP News</p>
+      </article>
+      <article class="story">
+        <h2><a href="https://www.aljazeera.com/news/2026/8/24/syria-israel-hold-us-mediated-talks-in-jordan-to-de-escalate-tensions" rel="noopener">Syria, Israel hold US-mediated talks in Jordan to de-escalate tensions</a></h2>
+        <p class="meta source">Al Jazeera</p>
+      </article>
+      <article class="story">
+        <h2><a href="https://apnews.com/article/cyclone-baltics-storm-power-injuries-f5e6f0701da4649fa8f6ce13424deffb" rel="noopener">Powerful storm hits Baltic countries, killing 2 and leaving hundreds of thousands without power</a></h2>
+        <p class="meta source">AP News</p>
+      </article>
+      <article class="story">
+        <h2><a href="https://www.bbc.co.uk/news/articles/c87n90eg0p2o" rel="noopener">US says sanctions will &#39;squash&#39; Iran&#39;s economy and &#39;collapse&#39; its regime</a></h2>
+        <p class="meta source">BBC News</p>
+      </article>
+
+    <footer class="meta">Gathered by openai/gpt-oss-120b</footer>
+  </main>
+</body>
+</html>
