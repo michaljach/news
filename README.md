@@ -1,7 +1,9 @@
 # news
 
-A single static page of the day's five biggest stories, plus one conceptual
-illustration for the lead. Black on white, centered, no rules or masthead.
+A single static page of the day's five biggest stories. The most important one
+leads, set larger under a wide duotone banner made for that story alone; the
+other four follow at normal weight. Black on white, centered, no rules or
+masthead.
 
 ## Use
 
@@ -33,11 +35,12 @@ is what a single feed's own ordering cannot tell you.
 Newsletters, opinion, sport and lifestyle are filtered out by title and URL, so
 digests like "Up First" and "First Thing" never reach the page.
 
-## The lead image
+## The banner
 
-One artwork per pull, for the top story only, in a duotone editorial style:
-a small duotone photographic panel floating in flat black negative space, beside
-a full-bleed grainy colour field with torn organic shapes.
+One artwork per pull, based solely on the top-ranked story, in a duotone
+editorial style: a small duotone photographic panel floating in flat black
+negative space, beside a grainy colour field with torn organic shapes. It runs
+as a wide banner (about 5:2) directly above the lead headline.
 
 It is built in two stages, because a diffusion model will not reliably honour a
 compositional brief — asking one for the whole layout returned a soft blob with

@@ -222,7 +222,7 @@ const PALETTES = [
   { dark: '#2f7d32', light: '#e2f1e3', field: '#e8563f', wash: '#fbe3dc' },
   { dark: '#2a5fc4', light: '#e4ecfc', field: '#e8a33f', wash: '#fdf0d9' },
   { dark: '#127f86', light: '#ddf0f1', field: '#d95f2b', wash: '#fbe4d6' },
-  { dark: '#a3243c', light: '#fbe6ea', field: '#c9c93f', wash: '#f7f7dc' },
+  { dark: '#7c1b2c', light: '#f0dde1', field: '#b5b539', wash: '#f1f1d6' },
 ];
 
 // Used when no model is reachable. Crude next to a generated metaphor, but it
@@ -335,7 +335,7 @@ const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255
 function leadArtwork(art) {
   const { palette, seed, label } = art;
   const table = (i) => `${channel(palette.dark, i)} ${channel(palette.light, i)}`;
-  return `<svg class="art" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
+  return `<svg class="art" viewBox="0 0 1536 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
           <feColorMatrix type="saturate" values="0"/>
@@ -358,20 +358,20 @@ function leadArtwork(art) {
           <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="${seed}"/>
           <feColorMatrix type="saturate" values="0"/>
         </filter>
-        <clipPath id="field"><rect x="768" y="0" width="768" height="1024"/></clipPath>
+        <clipPath id="field"><rect x="768" y="0" width="768" height="620"/></clipPath>
       </defs>
 
-      <rect width="1536" height="1024" fill="#000"/>
+      <rect width="1536" height="620" fill="#000"/>
 
       <g clip-path="url(#field)">
-        <rect x="768" y="0" width="768" height="1024" fill="${palette.field}"/>
-        <rect x="700" y="-120" width="920" height="1280" fill="${palette.wash}" filter="url(#mottle)"/>
+        <rect x="768" y="0" width="768" height="620" fill="${palette.field}"/>
+        <rect x="700" y="-140" width="920" height="900" fill="${palette.wash}" filter="url(#mottle)"/>
       </g>
 
-      <image href="${art.file}" x="140" y="272" width="524" height="400"
+      <image href="${art.file}" x="150" y="96" width="470" height="428"
              preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
 
-      <rect width="1536" height="1024" filter="url(#grain)" opacity="0.55"
+      <rect width="1536" height="620" filter="url(#grain)" opacity="0.55"
             style="mix-blend-mode:overlay"/>
     </svg>`;
 }
@@ -425,7 +425,7 @@ async function viaPollinations(prompt) {
   const url =
     'https://image.pollinations.ai/prompt/' +
     encodeURIComponent(prompt) +
-    '?width=1536&height=1024&nologo=true';
+    '?width=1024&height=1024&nologo=true';
   const res = await fetch(url, {
     headers: { 'user-agent': UA },
     signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
@@ -449,17 +449,18 @@ function render(headlines, at, art, footer) {
   });
   const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
-  const lead = art ? `    <figure class="lead">\n      ${leadArtwork(art)}\n    </figure>\n` : '';
+  const story = ({ title, source, url }, extra = '') => {
+    const heading = url
+      ? `<a href="${escape(url)}" rel="noopener">${escape(title)}</a>`
+      : escape(title);
+    const byline = source ? `\n        <p class="meta source">${escape(source)}</p>` : '';
+    return `      <article class="story${extra}">\n        <h2>${heading}</h2>${byline}\n      </article>`;
+  };
 
-  const stories = headlines
-    .map(({ title, source, url }) => {
-      const heading = url
-        ? `<a href="${escape(url)}" rel="noopener">${escape(title)}</a>`
-        : escape(title);
-      const byline = source ? `\n        <p class="meta source">${escape(source)}</p>` : '';
-      return `      <article class="story">\n        <h2>${heading}</h2>${byline}\n      </article>`;
-    })
-    .join('\n');
+  const [top, ...rest] = headlines;
+  const banner = art ? `    <figure class="banner">\n      ${leadArtwork(art)}\n    </figure>\n` : '';
+  const leadStory = story(top, ' story--lead');
+  const stories = rest.map((h) => story(h)).join('\n');
 
   return `<!doctype html>
 <html lang="en">
@@ -502,8 +503,9 @@ function render(headlines, at, art, footer) {
     font-size: 0.68rem;
   }
 
-  .lead { margin: 0 0 clamp(1.75rem, 4.5vw, 2.75rem); }
-  .lead .art { display: block; width: 100%; height: auto; }
+  .banner { margin: 0 0 clamp(1.4rem, 3.5vw, 2rem); }
+  .banner .art { display: block; width: 100%; height: auto; }
+
 
   .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
   .story h2 {
@@ -521,6 +523,13 @@ function render(headlines, at, art, footer) {
   }
   .story a:focus-visible { outline: 2px solid #000; outline-offset: 4px; }
 
+  .story--lead { padding-top: 0; padding-bottom: clamp(1.9rem, 4.5vw, 2.7rem); }
+  .story--lead h2 {
+    font-size: clamp(1.65rem, 4.6vw, 2.35rem);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
   .source { margin: 0.7rem 0 0; font-size: 0.66rem; }
 
   footer {
@@ -533,7 +542,9 @@ function render(headlines, at, art, footer) {
   <main>
     <p class="meta dateline">${escape(dateline)} &middot; ${escape(time)}</p>
 
-${lead}
+${banner}
+${leadStory}
+
 ${stories}
 
     <footer class="meta">${escape(footer)}</footer>

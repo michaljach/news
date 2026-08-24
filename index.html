@@ -39,8 +39,9 @@
     font-size: 0.68rem;
   }
 
-  .lead { margin: 0 0 clamp(1.75rem, 4.5vw, 2.75rem); }
-  .lead .art { display: block; width: 100%; height: auto; }
+  .banner { margin: 0 0 clamp(1.4rem, 3.5vw, 2rem); }
+  .banner .art { display: block; width: 100%; height: auto; }
+
 
   .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
   .story h2 {
@@ -58,6 +59,13 @@
   }
   .story a:focus-visible { outline: 2px solid #000; outline-offset: 4px; }
 
+  .story--lead { padding-top: 0; padding-bottom: clamp(1.9rem, 4.5vw, 2.7rem); }
+  .story--lead h2 {
+    font-size: clamp(1.65rem, 4.6vw, 2.35rem);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
   .source { margin: 0.7rem 0 0; font-size: 0.66rem; }
 
   footer {
@@ -68,57 +76,58 @@
 </head>
 <body>
   <main>
-    <p class="meta dateline">Monday, August 24, 2026 &middot; 3:19 PM</p>
+    <p class="meta dateline">Monday, August 24, 2026 &middot; 4:57 PM</p>
 
-    <figure class="lead">
-      <svg class="art" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A cracked stethoscope tangled in a wilted cricket bat">
+    <figure class="banner">
+      <svg class="art" viewBox="0 0 1536 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A cracked hourglass spilling ember-colored sand onto a dry desert road">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
           <feColorMatrix type="saturate" values="0"/>
           <feComponentTransfer>
-            <feFuncR type="table" tableValues="0.071 0.867"/>
-            <feFuncG type="table" tableValues="0.498 0.941"/>
-            <feFuncB type="table" tableValues="0.525 0.945"/>
+            <feFuncR type="table" tableValues="0.486 0.941"/>
+            <feFuncG type="table" tableValues="0.106 0.867"/>
+            <feFuncB type="table" tableValues="0.173 0.882"/>
           </feComponentTransfer>
         </filter>
         <filter id="mottle" x="-30%" y="-30%" width="160%" height="160%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="74"/>
+          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="75"/>
           <feColorMatrix type="luminanceToAlpha"/>
           <feComponentTransfer result="mask">
             <feFuncA type="discrete" tableValues="0 0 0 1 1"/>
           </feComponentTransfer>
-          <feFlood flood-color="#fbe4d6" result="wash"/>
+          <feFlood flood-color="#f1f1d6" result="wash"/>
           <feComposite in="wash" in2="mask" operator="in"/>
         </filter>
         <filter id="grain" x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="74"/>
+          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="75"/>
           <feColorMatrix type="saturate" values="0"/>
         </filter>
-        <clipPath id="field"><rect x="768" y="0" width="768" height="1024"/></clipPath>
+        <clipPath id="field"><rect x="768" y="0" width="768" height="620"/></clipPath>
       </defs>
 
-      <rect width="1536" height="1024" fill="#000"/>
+      <rect width="1536" height="620" fill="#000"/>
 
       <g clip-path="url(#field)">
-        <rect x="768" y="0" width="768" height="1024" fill="#d95f2b"/>
-        <rect x="700" y="-120" width="920" height="1280" fill="#fbe4d6" filter="url(#mottle)"/>
+        <rect x="768" y="0" width="768" height="620" fill="#b5b539"/>
+        <rect x="700" y="-140" width="920" height="900" fill="#f1f1d6" filter="url(#mottle)"/>
       </g>
 
-      <image href="lead.jpg" x="140" y="272" width="524" height="400"
+      <image href="lead.jpg" x="150" y="96" width="470" height="428"
              preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
 
-      <rect width="1536" height="1024" filter="url(#grain)" opacity="0.55"
+      <rect width="1536" height="620" filter="url(#grain)" opacity="0.55"
             style="mix-blend-mode:overlay"/>
     </svg>
     </figure>
 
+      <article class="story story--lead">
+        <h2><a href="https://www.npr.org/2026/08/23/g-s1-139729/thousands-forced-to-evacuate-parts-of-reno-nevada-as-new-wildfire-rages" rel="noopener">Thousands forced to evacuate parts of Reno, Nevada, as new wildfire rages</a></h2>
+        <p class="meta source">NPR</p>
+      </article>
+
       <article class="story">
         <h2><a href="https://news.sky.com/story/imran-khan-must-get-humane-treatment-and-proper-medical-care-in-prison-ex-cricket-captains-urge-pakistan-13576496" rel="noopener">Cricket legends urge Pakistan to provide &#39;proper medical care&#39; for Imran Khan</a></h2>
         <p class="meta source">Sky News</p>
-      </article>
-      <article class="story">
-        <h2><a href="https://www.theguardian.com/us-news/2026/aug/23/donald-trump-lashes-out-after-us-canada-talks-devolve-into-trade-war" rel="noopener">‘No more!!!’: Trump lashes out after US-Canada talks devolve into trade war</a></h2>
-        <p class="meta source">The Guardian</p>
       </article>
       <article class="story">
         <h2><a href="https://www.npr.org/2026/08/24/g-s1-139734/sonya-massey-convicted-deputy" rel="noopener">Sean Grayson, former deputy convicted of killing Sonya Massey, dies in prison, lawyer says</a></h2>
