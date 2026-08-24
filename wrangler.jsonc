@@ -3,6 +3,7 @@
   "name": "news",
   "main": "src/worker.js",
   "compatibility_date": "2026-08-24",
+  "compatibility_flags": ["nodejs_compat"],
 
   // Finished page lives here; the fetch handler only reads this string.
   "kv_namespaces": [

@@ -86,8 +86,9 @@ none of the intended structure.
    one instead, so the artwork still relates to the story.
 2. **Subject photo.** The image model renders only that object — single subject,
    plain background, hard side lighting.
-3. **Treatment.** The red duotone mapping and film grain are applied
-   deterministically with native SVG filters at render time. No image library.
+3. **Treatment.** The red duotone mapping, film grain and 4:3 centre crop are
+   baked into the pixels before the image is stored, so `/lead.jpg` *is* the
+   finished artwork rather than a raw photo the page decorates.
 
 Treating a symbolic object as a silkscreen is what keeps this editorial artwork
 rather than a fabricated news photo. The prompt rules out real people, faces,
@@ -95,6 +96,17 @@ text and gore. If generation fails, the page still builds without it.
 
 In production both stages run on Workers AI. Locally they fall back to Groq and
 Pollinations, so the preview never needs a key.
+
+## Social cards
+
+Open Graph and Twitter tags are emitted per build: the lead headline as the
+title, the one-line note as the description, and `/lead.jpg` as the card image,
+carrying the same `?v=` as the page so crawler caches turn over on each rebuild.
+
+The treatment has to be baked rather than left to SVG filters for exactly this
+reason — a crawler fetches `og:image` as a flat file and will not run filters, so
+the stored JPEG has to already be red and grainy. That is also why the page now
+uses a plain `<img>`: page and card are the same file.
 
 ## Knobs
 

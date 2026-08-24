@@ -18,6 +18,7 @@ import {
   fallbackConcept,
   imagePrompt,
   render,
+  treat,
   UA,
 } from './src/news.js';
 
@@ -87,8 +88,9 @@ async function generateLeadImage(headline) {
 
     const bytes = Buffer.from(await res.arrayBuffer());
     if (bytes.length < 2000) throw new Error('empty image');
-    writeFileSync(join(ROOT, IMAGE_FILE), bytes);
-    console.log(`lead image -> ${IMAGE_FILE} (${Math.round(bytes.length / 1024)} KB)`);
+    const baked = treat(bytes);
+    writeFileSync(join(ROOT, IMAGE_FILE), baked);
+    console.log(`lead image -> ${IMAGE_FILE} (${Math.round(baked.length / 1024)} KB)`);
 
     return {
       href: IMAGE_FILE,

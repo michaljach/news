@@ -13,6 +13,7 @@ import {
   imagePrompt,
   leadArtwork,
   render,
+  treat,
 } from './news.js';
 
 const PAGE_KEY = 'page:v1';
@@ -107,7 +108,7 @@ async function makeArtwork(env, headline) {
     const binary = atob(out.image);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    await env.NEWS.put(IMAGE_KEY, bytes);
+    await env.NEWS.put(IMAGE_KEY, treat(bytes));
 
     return {
       href: `/lead.jpg?v=${slot}`,

@@ -1,3 +1,5 @@
+import jpeg from 'jpeg-js';
+
 // Shared, environment-free logic for the news page.
 //
 // Imported by build.mjs (local preview, writes files) and src/worker.js
@@ -13,6 +15,7 @@ export const ABOUT =
   'many independent outlets ran each one.';
 
 export const AUTHOR = { handle: '@michaeljach', url: 'https://x.com/michaeljach' };
+export const SITE = 'https://news.jach.me';
 
 
 export const UA = 'Mozilla/5.0 (compatible; news-page/1.0)';
@@ -204,6 +207,48 @@ export function selectTopStories(items) {
 // One red duotone. The rotation that used to live here paired a photo tone with
 // the abstract colour field; that field is gone, so there is nothing to pair.
 export const DUOTONE = { dark: '#8e1f2f', light: '#f4e3e2' };
+export const ART_WIDTH = 1024;
+export const ART_HEIGHT = 768;
+const GRAIN = 0.17;
+
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+
+// Bakes the duotone and grain into the pixels rather than leaving them to SVG
+// filters. Social crawlers fetch og:image as a flat file and will not run
+// filters, so the stored JPEG has to already be the finished artwork.
+//
+// Same maths the SVG did: luminance drives a two-stop colour ramp. The centre
+// crop to 4:3 replaces preserveAspectRatio="slice".
+export function treat(bytes) {
+  const src = jpeg.decode(bytes, { useTArray: true });
+  const scale = Math.max(ART_WIDTH / src.width, ART_HEIGHT / src.height);
+  const [dr, dg, db] = rgb(DUOTONE.dark);
+  const [lr, lg, lb] = rgb(DUOTONE.light);
+
+  const out = new Uint8Array(ART_WIDTH * ART_HEIGHT * 4);
+  const offX = (src.width - ART_WIDTH / scale) / 2;
+  const offY = (src.height - ART_HEIGHT / scale) / 2;
+
+  for (let y = 0; y < ART_HEIGHT; y++) {
+    const sy = Math.min(src.height - 1, Math.round(offY + y / scale));
+    for (let x = 0; x < ART_WIDTH; x++) {
+      const sx = Math.min(src.width - 1, Math.round(offX + x / scale));
+      const si = (sy * src.width + sx) * 4;
+
+      const lum =
+        (src.data[si] * 0.2126 + src.data[si + 1] * 0.7152 + src.data[si + 2] * 0.0722) / 255;
+      const t = Math.min(1, Math.max(0, lum + (Math.random() - 0.5) * GRAIN));
+
+      const di = (y * ART_WIDTH + x) * 4;
+      out[di] = dr + (lr - dr) * t;
+      out[di + 1] = dg + (lg - dg) * t;
+      out[di + 2] = db + (lb - db) * t;
+      out[di + 3] = 255;
+    }
+  }
+
+  return jpeg.encode({ data: out, width: ART_WIDTH, height: ART_HEIGHT }, 82).data;
+}
 
 // Used when no model is reachable. Crude next to a generated metaphor, but it
 // keeps the artwork tied to the story instead of falling back to a generic blob.
@@ -274,8 +319,6 @@ export function imagePrompt(concept) {
   ].join(' ');
 }
 
-const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255).toFixed(3);
-
 // Duotone via luminance then a two-stop transfer table. The split between the
 // black field and the colour field is a hard vertical edge; the organic shapes
 // live inside the colour field, not on its boundary. Grain is one overlay pass
@@ -283,30 +326,7 @@ const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255
 // bites only on the colour field and the photograph, which is what the printed
 // reference does. All native SVG filters, so no image library is involved.
 export function leadArtwork(art) {
-  const { seed, label } = art;
-  const table = (i) => `${channel(DUOTONE.dark, i)} ${channel(DUOTONE.light, i)}`;
-  return `<svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
-      <defs>
-        <filter id="duotone" color-interpolation-filters="sRGB">
-          <feColorMatrix type="saturate" values="0"/>
-          <feComponentTransfer>
-            <feFuncR type="table" tableValues="${table(0)}"/>
-            <feFuncG type="table" tableValues="${table(1)}"/>
-            <feFuncB type="table" tableValues="${table(2)}"/>
-          </feComponentTransfer>
-        </filter>
-        <filter id="grain" x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="${seed}"/>
-          <feColorMatrix type="saturate" values="0"/>
-        </filter>
-      </defs>
-
-      <rect width="1536" height="1152" fill="${DUOTONE.light}"/>
-      <image href="${art.href}" x="0" y="0" width="1536" height="1152"
-             preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
-      <rect width="1536" height="1152" filter="url(#grain)" opacity="0.6"
-            style="mix-blend-mode:overlay"/>
-    </svg>`;
+  return `<img class="art" src="${escape(art.href)}" width="${ART_WIDTH}" height="${ART_HEIGHT}" alt="${escape(art.label)}">`;
 }
 
 // --- render ---------------------------------------------------------------
@@ -333,6 +353,39 @@ export function render(headlines, at, art, footer) {
   };
 
   const [top, ...rest] = headlines;
+
+  // Crawlers fetch og:image as a flat file, so it points at the baked JPEG and
+  // carries the same ?v= as the page to bust their caches on each rebuild.
+  const version = art?.href?.includes('?') ? art.href.slice(art.href.indexOf('?')) : '';
+  const card = [
+    ['og:type', 'website'],
+    ['og:site_name', 'Latest News'],
+    ['og:url', `${SITE}/`],
+    ['og:title', top.title],
+    ['og:description', ABOUT],
+    ...(art
+      ? [
+          ['og:image', `${SITE}/lead.jpg${version}`],
+          ['og:image:width', String(ART_WIDTH)],
+          ['og:image:height', String(ART_HEIGHT)],
+          ['og:image:alt', art.label],
+        ]
+      : []),
+  ];
+  const named = [
+    ['description', ABOUT],
+    ['twitter:card', art ? 'summary_large_image' : 'summary'],
+    ['twitter:title', top.title],
+    ['twitter:description', ABOUT],
+    ['twitter:creator', AUTHOR.handle],
+    ...(art ? [['twitter:image', `${SITE}/lead.jpg${version}`], ['twitter:image:alt', art.label]] : []),
+  ];
+  const social = [
+    `<link rel="canonical" href="${SITE}/">`,
+    ...named.map(([k, v]) => `<meta name="${k}" content="${escape(v)}">`),
+    ...card.map(([k, v]) => `<meta property="${k}" content="${escape(v)}">`),
+  ].join('\n');
+
   const banner = art ? `      <figure class="banner">\n        ${leadArtwork(art)}\n      </figure>` : '';
   const leadStory = story(top, ' story--lead');
   const stories = rest.map((h) => story(h)).join('\n');
@@ -343,6 +396,7 @@ export function render(headlines, at, art, footer) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Latest News</title>
+${social}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&display=swap" rel="stylesheet">
