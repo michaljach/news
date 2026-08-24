@@ -5,7 +5,7 @@ leads, set larger under a wide duotone banner made for that story alone; the
 other four follow at normal weight. Black on white, centered, no rules or
 masthead.
 
-Live at **https://news.jach.workers.dev**
+Live at **https://news.jach.me** (also on https://news.jach.workers.dev)
 
 ## Deployment
 
@@ -14,7 +14,7 @@ It runs as a Cloudflare Worker on the free plan, with no external API keys.
 ```sh
 npx wrangler deploy                  # ship
 npx wrangler tail                    # live logs
-curl "https://news.jach.workers.dev/__build?token=$BUILD_TOKEN"   # rebuild now
+curl "https://news.jach.me/__build?token=$BUILD_TOKEN"   # rebuild now
 ```
 
 A Cron Trigger fires every two hours. The `scheduled` handler does the whole
@@ -30,6 +30,11 @@ plan's per-request CPU budget; building inside a request would not fit.
 
 Twelve builds a day sits far under all three. `BUILD_TOKEN` is a Worker secret;
 `/__build` returns 404 unless it matches.
+
+`news.jach.me` is a custom domain on the `jach.me` zone; wrangler manages its DNS
+record and certificate. Note that declaring any route turns the `*.workers.dev`
+URL off unless `workers_dev` is set explicitly, which is why it is pinned to
+`true` in the config.
 
 ## Local preview
 

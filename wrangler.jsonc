@@ -15,5 +15,11 @@
   // Rebuild every two hours, on the hour (UTC).
   "triggers": { "crons": ["0 */2 * * *"] },
 
+  // Custom domain; wrangler manages the DNS record and certificate.
+  // Adding a route turns workers.dev off unless it is set explicitly, and the
+  // *.workers.dev URL is worth keeping as a fallback.
+  "routes": [{ "pattern": "news.jach.me", "custom_domain": true }],
+  "workers_dev": true,
+
   "observability": { "enabled": true }
 }
