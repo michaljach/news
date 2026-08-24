@@ -17,6 +17,10 @@ export const ABOUT =
 export const AUTHOR = { handle: '@michaeljach', url: 'https://x.com/michaeljach' };
 export const SITE = 'https://news.jach.me';
 
+// Static, so a shared link does not read as an endorsement of whichever story
+// happened to lead when the card was scraped.
+export const CARD_TITLE = `${COUNT} current world news`;
+
 
 export const UA = 'Mozilla/5.0 (compatible; news-page/1.0)';
 
@@ -361,7 +365,7 @@ export function render(headlines, at, art, footer) {
     ['og:type', 'website'],
     ['og:site_name', 'Latest News'],
     ['og:url', `${SITE}/`],
-    ['og:title', top.title],
+    ['og:title', CARD_TITLE],
     ['og:description', ABOUT],
     ...(art
       ? [
@@ -375,7 +379,7 @@ export function render(headlines, at, art, footer) {
   const named = [
     ['description', ABOUT],
     ['twitter:card', art ? 'summary_large_image' : 'summary'],
-    ['twitter:title', top.title],
+    ['twitter:title', CARD_TITLE],
     ['twitter:description', ABOUT],
     ['twitter:creator', AUTHOR.handle],
     ...(art ? [['twitter:image', `${SITE}/lead.jpg${version}`], ['twitter:image:alt', art.label]] : []),

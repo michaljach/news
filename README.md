@@ -99,9 +99,13 @@ Pollinations, so the preview never needs a key.
 
 ## Social cards
 
-Open Graph and Twitter tags are emitted per build: the lead headline as the
-title, the one-line note as the description, and `/lead.jpg` as the card image,
-carrying the same `?v=` as the page so crawler caches turn over on each rebuild.
+Open Graph and Twitter tags are emitted per build: a fixed title, the one-line
+note as the description, and `/lead.jpg` as the card image, carrying the same
+`?v=` as the page so crawler caches turn over on each rebuild.
+
+The title is deliberately static rather than the lead headline, so a shared link
+does not read as an endorsement of whichever story happened to lead when the
+card was scraped.
 
 The treatment has to be baked rather than left to SVG filters for exactly this
 reason — a crawler fetches `og:image` as a flat file and will not run filters, so
