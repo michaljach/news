@@ -87,6 +87,14 @@
     text-align: center;
     color: #767676;
   }
+  .about a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+  }
+  .about a:hover { color: #000; }
+  .about a:focus-visible { outline: 2px solid #767676; outline-offset: 3px; }
 
   /* Desktop: artwork takes the larger left column, headlines sit beside it.
      Below this width everything stacks and stays centred. */
@@ -117,7 +125,7 @@
   <main>
     <div class="page">
       <figure class="banner">
-        <svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A lone charred wooden rocking chair perched on a river of orange flames">
+        <svg class="art" viewBox="0 0 1536 1152" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A cracked porcelain teacup spilling ash like a wildfire">
       <defs>
         <filter id="duotone" color-interpolation-filters="sRGB">
           <feColorMatrix type="saturate" values="0"/>
@@ -166,9 +174,9 @@
     </div>
 
     <footer>
-      <p class="meta">Monday, August 24, 2026 &middot; 5:19 PM</p>
+      <p class="meta">Monday, August 24, 2026 &middot; 5:22 PM</p>
       <p class="meta">6 feeds · ranked by cross-outlet coverage</p>
-      <p class="about">Every two hours this page pulls six publisher feeds, ranks the stories by how many independent outlets ran each one, and generates a banner for whichever leads.</p>
+      <p class="about">Every two hours this page pulls six publisher feeds, ranks the stories by how many independent outlets ran each one. Made by <a href="https://x.com/michaeljach" rel="noopener">@michaeljach</a></p>
     </footer>
   </main>
 </body>

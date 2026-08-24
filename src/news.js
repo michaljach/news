@@ -10,7 +10,9 @@ export const TIMEZONE = 'Europe/Warsaw';
 
 export const ABOUT =
   'Every two hours this page pulls six publisher feeds, ranks the stories by how ' +
-  'many independent outlets ran each one, and generates a banner for whichever leads.';
+  'many independent outlets ran each one.';
+
+export const AUTHOR = { handle: '@michaeljach', url: 'https://x.com/michaeljach' };
 
 
 export const UA = 'Mozilla/5.0 (compatible; news-page/1.0)';
@@ -424,6 +426,14 @@ export function render(headlines, at, art, footer) {
     text-align: center;
     color: #767676;
   }
+  .about a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.15em;
+  }
+  .about a:hover { color: #000; }
+  .about a:focus-visible { outline: 2px solid #767676; outline-offset: 3px; }
 
   /* Desktop: artwork takes the larger left column, headlines sit beside it.
      Below this width everything stacks and stays centred. */
@@ -464,7 +474,7 @@ ${stories}
     <footer>
       <p class="meta">${escape(dateline)} &middot; ${escape(time)}</p>
       <p class="meta">${escape(footer)}</p>
-      <p class="about">${escape(ABOUT)}</p>
+      <p class="about">${escape(ABOUT)} Made by <a href="${escape(AUTHOR.url)}" rel="noopener">${escape(AUTHOR.handle)}</a></p>
     </footer>
   </main>
 </body>
