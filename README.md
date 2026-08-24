@@ -36,6 +36,17 @@ record and certificate. Note that declaring any route turns the `*.workers.dev`
 URL off unless `workers_dev` is set explicitly, which is why it is pinned to
 `true` in the config.
 
+## Tests
+
+```sh
+npm test
+```
+
+Covers the ranking contract: strict importance order, the per-outlet cap, and
+that stories persist across pulls without duplicating. The order test exists
+because the cap defers a story to a relaxed second pass, where it could land
+below a story it outranks -- which only shows up on a day one outlet dominates.
+
 ## Local preview
 
 ```sh

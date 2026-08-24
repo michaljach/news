@@ -5,7 +5,8 @@
   "scripts": {
     "build": "node build.mjs",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "test": "node --test"
   },
   "dependencies": {
     "jpeg-js": "^0.4.4"

@@ -225,23 +225,30 @@ export function selectTopStories(items) {
 
   const maxPerSource = Math.max(1, Math.ceil(COUNT / 2));
   const used = new Map();
-  const picks = [];
+  const chosen = [];
 
   for (const pass of [maxPerSource, COUNT]) {
     for (const c of ranked) {
-      if (picks.length >= COUNT) break;
+      if (chosen.length >= COUNT) break;
       // Represent the cluster with its most prominently placed headline.
       const best = c.items.slice().sort((a, b) => a.pos - b.pos)[0];
-      if (picks.includes(best)) continue;
+      if (chosen.some((p) => p.item === best)) continue;
       const count = used.get(best.source) ?? 0;
       if (count >= pass) continue;
       used.set(best.source, count + 1);
-      picks.push(best);
+      chosen.push({ item: best, score: c.score });
     }
-    if (picks.length >= COUNT) break;
+    if (chosen.length >= COUNT) break;
   }
 
-  return picks.slice(0, COUNT);
+  // The relaxed second pass can admit a story that outranks one already taken,
+  // which would otherwise leave it sitting below its junior. Order by score
+  // explicitly so the page always reads most important first, and so the banner
+  // is built from the genuine top story.
+  return chosen
+    .sort((a, b) => b.score - a.score)
+    .slice(0, COUNT)
+    .map((p) => p.item);
 }
 
 // --- lead image -----------------------------------------------------------
