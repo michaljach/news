@@ -5,14 +5,44 @@ leads, set larger under a wide duotone banner made for that story alone; the
 other four follow at normal weight. Black on white, centered, no rules or
 masthead.
 
-## Use
+Live at **https://news.jach.workers.dev**
+
+## Deployment
+
+It runs as a Cloudflare Worker on the free plan, with no external API keys.
+
+```sh
+npx wrangler deploy                  # ship
+npx wrangler tail                    # live logs
+curl "https://news.jach.workers.dev/__build?token=$BUILD_TOKEN"   # rebuild now
+```
+
+A Cron Trigger fires every two hours. The `scheduled` handler does the whole
+build — feeds, ranking, concept, image — and writes the finished page to KV. The
+`fetch` handler only reads that string back, which keeps it far inside the free
+plan's per-request CPU budget; building inside a request would not fit.
+
+| Piece | Binding | Free allowance |
+| --- | --- | --- |
+| Page + banner storage | `NEWS` (KV) | 100k reads, 1k writes/day |
+| Concept text model | `AI` — `llama-3.3-70b-instruct-fp8-fast` | 10k neurons/day |
+| Banner image | `AI` — `flux-1-schnell` | ~230 images/day |
+
+Twelve builds a day sits far under all three. `BUILD_TOKEN` is a Worker secret;
+`/__build` returns 404 unless it matches.
+
+## Local preview
 
 ```sh
 node build.mjs   # rewrites index.html and lead.jpg
 open index.html
 ```
 
-No API key is required. It runs on a clean machine with nothing configured.
+`src/news.js` holds everything both targets share — feeds, parsing, ranking,
+the artwork SVG and the page template — so local output matches production.
+Only the providers differ: locally the concept comes from Groq (falling back to
+the motif table) and the image from Pollinations, since Workers AI is not
+reachable from outside the Worker. No key is required either way.
 
 ## How it works
 
@@ -63,13 +93,8 @@ Treating a symbolic object as a silkscreen is what keeps this editorial artwork
 rather than a fabricated news photo. The prompt rules out real people, faces,
 text and gore. If generation fails, the page still builds without it.
 
-| Image provider | When | Free limit |
-| --- | --- | --- |
-| Cloudflare Workers AI (FLUX.1 Schnell) | `CF_ACCOUNT_ID` + `CF_API_TOKEN` set | ~230 images/day |
-| Pollinations | otherwise | no key, no account, slower |
-
-The concept step uses `GROQ_API_KEY` if present and silently falls back to the
-motif table when the free tier is exhausted.
+In production both stages run on Workers AI. Locally they fall back to Groq and
+Pollinations, so the preview never needs a key.
 
 ## Knobs
 
@@ -78,19 +103,6 @@ motif table when the free tier is exhausted.
 | `NEWS_COUNT` | `5` | headlines to show |
 | `FEED_TIMEOUT_MS` | `20000` | per feed; a dead feed is skipped, not fatal |
 | `IMAGE_TIMEOUT_MS` | `180000` | Pollinations can be slow |
-
-## Scheduling
-
-A launchd agent rebuilds the page every 2 hours:
-
-```sh
-launchctl list | grep com.michaljach.news       # status
-tail -f build.log                               # output
-launchctl unload ~/Library/LaunchAgents/com.michaljach.news.plist   # stop
-```
-
-It runs on load and every 7200s after. The node path is baked into the plist,
-so regenerate it after an nvm version bump.
 
 ## Rate limits, for the record
 

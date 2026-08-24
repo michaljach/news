@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "news",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-08-24",
+
+  // Finished page lives here; the fetch handler only reads this string.
+  "kv_namespaces": [
+    { "binding": "NEWS", "id": "63f8142b11ed410bb1496dbc53f72c5c" }
+  ],
+
+  // Concept text model + FLUX.1 Schnell for the banner.
+  "ai": { "binding": "AI" },
+
+  // Rebuild every two hours, on the hour (UTC).
+  "triggers": { "crons": ["0 */2 * * *"] },
+
+  "observability": { "enabled": true }
+}
