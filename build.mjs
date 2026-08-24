@@ -1,10 +1,13 @@
 #!/usr/bin/env node
-// Pulls current headlines from a web-search-capable model and renders them
-// into a static index.html, plus one conceptual illustration for the lead story.
+// Builds a static page of current headlines.
 //
-// Default provider is Google (Gemini + Google Search grounding), which has a
-// free tier and covers both the search and the image with a single key.
-// Groq is kept behind NEWS_PROVIDER=groq.
+// Everything factual comes from publisher RSS feeds: real titles, real article
+// URLs, real publication names. That removes the hallucinated-URL problem and
+// the search-grounding quota that metered every LLM route.
+//
+// Which five stories lead is decided by how many independent outlets ran the
+// story, so ranking needs no API and has no quota. The only model call left is
+// the lead illustration, and failing it costs nothing but the picture.
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -12,26 +15,22 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 
-const PROVIDER = process.env.NEWS_PROVIDER ?? 'google';
 const COUNT = Number(process.env.NEWS_COUNT ?? 5);
-const PROMPT = 'latest news';
-const IMAGE_FILE = 'lead.png';
+const FEED_TIMEOUT_MS = Number(process.env.FEED_TIMEOUT_MS ?? 20_000);
+const IMAGE_TIMEOUT_MS = Number(process.env.IMAGE_TIMEOUT_MS ?? 180_000);
+const UA = 'Mozilla/5.0 (compatible; news-page/1.0)';
 
-const GOOGLE_MODEL = process.env.GOOGLE_MODEL ?? 'gemini-3.6-flash';
-const IMAGE_MODEL = process.env.IMAGE_MODEL ?? 'gemini-3.1-flash-image';
-const GROQ_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b';
-
-const TIMEOUT_MS = Number(process.env.TIMEOUT_MS ?? 90_000);
-const IMAGE_TIMEOUT_MS = Number(process.env.IMAGE_TIMEOUT_MS ?? 120_000);
-const MAX_BACKOFF_S = Number(process.env.MAX_BACKOFF_S ?? 60);
-
-const GOOGLE_API = 'https://generativelanguage.googleapis.com/v1beta/models';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const FEEDS = [
+  { name: 'BBC News', url: 'https://feeds.bbci.co.uk/news/world/rss.xml' },
+  { name: 'The Guardian', url: 'https://www.theguardian.com/world/rss' },
+  { name: 'NPR', url: 'https://feeds.npr.org/1001/rss.xml' },
+  { name: 'Al Jazeera', url: 'https://www.aljazeera.com/xml/rss/all.xml' },
+  { name: 'DW', url: 'https://rss.dw.com/rdf/rss-en-world' },
+  { name: 'Sky News', url: 'https://feeds.skynews.com/feeds/rss/world.xml' },
+];
 
 function readKey(...names) {
-  for (const name of names) {
-    if (process.env[name]) return process.env[name];
-  }
+  for (const name of names) if (process.env[name]) return process.env[name];
   const envFile = join(ROOT, '.env');
   if (!existsSync(envFile)) return null;
   for (const line of readFileSync(envFile, 'utf8').split('\n')) {
@@ -44,254 +43,174 @@ function readKey(...names) {
   return null;
 }
 
-const googleKey = () => readKey('GEMINI_API_KEY', 'GOOGLE_API_KEY');
+// --- RSS ------------------------------------------------------------------
 
-const SYSTEM = `You are a newswire desk. Search the web for what is happening right now and report the top ${COUNT} stories.
-
-Reply with JSON only. No prose, no code fences:
-{"headlines":[{"title":"...","source":"...","url":"..."}]}
-
-Rules:
-- title: the real headline, plain text, under 110 characters, no trailing period.
-- source: the publication name, e.g. "Reuters".
-- url: the direct article URL, copied verbatim from a search result. Never invent one.
-- Most significant story first. One entry per story, no duplicates.`;
-
-// --- shared helpers -------------------------------------------------------
-
-function parseHeadlines(raw) {
-  const text = (raw ?? '').trim();
-  const json = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
-  let parsed;
-  try {
-    parsed = JSON.parse(json);
-  } catch {
-    throw new Error(`model did not return JSON: ${text.slice(0, 200)}`);
-  }
-  return (parsed.headlines ?? [])
-    .filter((h) => h && typeof h.title === 'string' && h.title.trim())
-    .slice(0, COUNT)
-    .map((h) => ({
-      title: h.title.trim().replace(/\.$/, ''),
-      source: (h.source ?? '').trim(),
-      url: typeof h.url === 'string' ? h.url.trim() : null,
-    }));
+function decodeEntities(text) {
+  return text
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&(?:apos|#39);/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-const bareHost = (u) => {
-  try {
-    return new URL(u).host.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-};
-
-function collectUrls(value, into = new Set()) {
-  if (typeof value === 'string') {
-    for (const url of value.match(/https?:\/\/[^\s"'<>)\]]+/g) ?? []) into.add(url);
-  } else if (Array.isArray(value)) {
-    value.forEach((v) => collectUrls(v, into));
-  } else if (value && typeof value === 'object') {
-    Object.values(value).forEach((v) => collectUrls(v, into));
-  }
-  return into;
+function tagText(block, name) {
+  const m = block.match(new RegExp('<' + name + '(?:\\s[^>]*)?>([\\s\\S]*?)</' + name + '>', 'i'));
+  return m ? decodeEntities(m[1]) : null;
 }
 
-// Only 404/410 prove a URL is fabricated. News sites routinely answer bots with
-// 403, so treat anything else that responds as good enough to link.
-async function looksAlive(url) {
-  const opts = {
-    redirect: 'follow',
-    signal: AbortSignal.timeout(10_000),
-    headers: { 'user-agent': 'Mozilla/5.0 (compatible; news-page link check)' },
-  };
-  try {
-    let res = await fetch(url, { ...opts, method: 'HEAD' });
-    if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { ...opts, method: 'GET' });
-    }
-    return res.status !== 404 && res.status !== 410;
-  } catch {
-    return false;
-  }
+function itemLink(block) {
+  const plain = tagText(block, 'link');
+  if (plain && /^https?:/i.test(plain)) return plain;
+  const href = block.match(/<link[^>]*href=["']([^"']+)["']/i);
+  if (href) return decodeEntities(href[1]);
+  const guid = tagText(block, 'guid');
+  if (guid && /^https?:/i.test(guid)) return guid;
+  return null;
 }
 
-// A link is kept when the provider's own tool output vouches for it, otherwise
-// when the page actually resolves. Everything else renders as plain text.
-async function verifyLinks(headlines, { urls = new Set(), hosts = new Set() }) {
-  const exact = new Set();
-  for (const u of urls) {
-    const host = bareHost(u);
-    if (!host) continue;
-    exact.add(`${host}${new URL(u).pathname.replace(/\/+$/, '')}`);
+// Feeds mix reporting with newsletters, opinion and lifestyle. A headlines page
+// wants the reporting, so digests like "Up First" and "First Thing" are dropped.
+const SKIP_TITLE =
+  /\b(first thing|up first|morning mail|weekend edition|newsletter|the guardian view|opinion|editorial|podcast|quiz|crossword|recipe|horoscope|what to watch|best photos|in pictures)\b/i;
+
+const SKIP_URL =
+  /\/(newsletters?|up-first|first-thing|opinion|commentisfree|podcasts?|crosswords?|lifeandstyle|food|fashion|travel|sport|football|games|tv-and-radio|culture|books|music)\//i;
+
+function parseFeed(xml, fallbackSource) {
+  const items = [];
+  const re = /<item(?:\s[^>]*)?>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = re.exec(xml))) {
+    const block = m[1];
+    const title = tagText(block, 'title');
+    const url = itemLink(block);
+    if (!title || !url) continue;
+
+    // Feeds vary: "Headline - Publisher", trailing whitespace, stray periods.
+    // Only strip a final period when it is not part of an abbreviation, so
+    // "tariffs on U.S." does not become "tariffs on U.S".
+    const clean = title
+      .replace(/\s+[-–|]\s+[^-–|]{2,30}$/, '')
+      .replace(/(?<![A-Z])\.$/, '')
+      .trim();
+    if (clean.length < 15) continue;
+    if (SKIP_TITLE.test(clean) || SKIP_URL.test(url)) continue;
+
+    items.push({
+      title: clean,
+      url,
+      source: tagText(block, 'source') || fallbackSource,
+      date: Date.parse(tagText(block, 'pubDate') ?? tagText(block, 'dc:date') ?? '') || 0,
+      pos: items.length,
+    });
   }
+  return items;
+}
 
-  return Promise.all(
-    headlines.map(async (h) => {
-      if (!h.url) return { ...h, url: null };
-      const host = bareHost(h.url);
-      if (!host) return { ...h, url: null };
-
-      let path;
+async function fetchFeeds() {
+  const results = await Promise.all(
+    FEEDS.map(async (feed) => {
       try {
-        path = `${host}${new URL(h.url).pathname.replace(/\/+$/, '')}`;
-      } catch {
-        return { ...h, url: null };
+        const res = await fetch(feed.url, {
+          headers: { 'user-agent': UA },
+          redirect: 'follow',
+          signal: AbortSignal.timeout(FEED_TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return parseFeed(await res.text(), feed.name);
+      } catch (err) {
+        // One dead feed should never fail the build.
+        console.error(`feed ${feed.name} unavailable (${err.message})`);
+        return [];
       }
-
-      const vouched = exact.has(path) || hosts.has(host);
-      if (vouched && (await looksAlive(h.url))) return h;
-      if (!vouched && (await looksAlive(h.url))) return h;
-      return { ...h, url: null };
     })
   );
+
+  const live = results.filter((r) => r.length).length;
+  return { items: results.flat(), feedsUsed: live };
 }
 
-// --- google ---------------------------------------------------------------
+const STOPWORDS = new Set(
+  ('a an the of in on at to for from by with and or as is are was were be been after over into ' +
+   'amid says say said new more than its his her their our up down out off about not no').split(' ')
+);
 
-async function fetchFromGoogle() {
-  const key = googleKey();
-  if (!key) throw new Error('missing GEMINI_API_KEY — put it in .env or export it');
+const keyWords = (title) =>
+  new Set(
+    title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+  );
 
-  const body = {
-    systemInstruction: { parts: [{ text: SYSTEM }] },
-    contents: [{ role: 'user', parts: [{ text: PROMPT }] }],
-    tools: [{ googleSearch: {} }],
-    generationConfig: { temperature: 0.2 },
-  };
+// Group headlines that describe the same event. The cluster signature stays
+// fixed to the first headline's words; letting it grow would make a cluster
+// match everything after a few merges.
+function cluster(items) {
+  const clusters = [];
+  for (const item of items.sort((a, b) => b.date - a.date)) {
+    const words = keyWords(item.title);
+    if (!words.size) continue;
 
-  const data = await googleCall(`${GOOGLE_MODEL}:generateContent`, key, body, TIMEOUT_MS);
-  const candidate = data.candidates?.[0];
-  const text = (candidate?.content?.parts ?? []).map((p) => p.text ?? '').join('');
-
-  // Grounding gives redirect URIs rather than article URLs, so the useful
-  // signal is which publications Google actually consulted.
-  const hosts = new Set();
-  for (const chunk of candidate?.groundingMetadata?.groundingChunks ?? []) {
-    for (const v of [chunk.web?.domain, chunk.web?.title]) {
-      const h = v && String(v).toLowerCase().replace(/^www\./, '');
-      if (h && h.includes('.')) hosts.add(h);
-    }
-  }
-
-  return { headlines: parseHeadlines(text), hosts, urls: new Set() };
-}
-
-async function googleCall(path, key, body, timeout, attempt = 1) {
-  let res;
-  try {
-    res = await fetch(`${GOOGLE_API}/${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeout),
+    const hit = clusters.find((c) => {
+      const shared = [...words].filter((w) => c.words.has(w)).length;
+      return shared / Math.min(words.size, c.words.size) > 0.45;
     });
-  } catch (err) {
-    if (err.name === 'TimeoutError' && attempt <= 3) {
-      console.error(`Google timed out after ${timeout / 1000}s, retrying (${attempt}/3)...`);
-      return googleCall(path, key, body, timeout, attempt + 1);
-    }
-    throw err;
-  }
 
-  if (res.ok) return res.json();
-
-  const text = await res.text();
-  if (res.status === 429) {
-    const secs = retryAfterSeconds(text, res) ?? attempt * 10;
-    if (secs > MAX_BACKOFF_S || attempt > 3) {
-      throw new Error(`Google quota exhausted. Retry in ${formatWait(secs)}.\n${errorMessage(text)}`);
+    if (hit) {
+      hit.items.push(item);
+      hit.sources.add(item.source);
+    } else {
+      clusters.push({ items: [item], sources: new Set([item.source]), words });
     }
-    console.error(`Rate limited, retrying in ${Math.round(secs)}s (${attempt}/3)...`);
-    await sleep(secs * 1000 + 750);
-    return googleCall(path, key, body, timeout, attempt + 1);
   }
-  throw new Error(`Google ${res.status}: ${errorMessage(text)}`);
+  return clusters;
 }
 
-// --- groq -----------------------------------------------------------------
-
-async function fetchFromGroq(attempt = 1) {
-  const key = readKey('GROQ_API_KEY');
-  if (!key) throw new Error('missing GROQ_API_KEY — put it in .env or export it');
-
-  const builtInSearch = GROQ_MODEL.startsWith('groq/compound');
-  let res;
-  try {
-    res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: GROQ_MODEL,
-        temperature: 0.2,
-        max_tokens: 3000,
-        messages: [
-          { role: 'system', content: SYSTEM },
-          { role: 'user', content: PROMPT },
-        ],
-        ...(builtInSearch ? {} : { tools: [{ type: 'browser_search' }] }),
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-  } catch (err) {
-    if (err.name === 'TimeoutError' && attempt <= 3) {
-      console.error(`Groq timed out after ${TIMEOUT_MS / 1000}s, retrying (${attempt}/3)...`);
-      return fetchFromGroq(attempt + 1);
-    }
-    throw err;
-  }
-
-  if (!res.ok) {
-    const text = await res.text();
-    if (res.status === 413) {
-      throw new Error(`Groq 413: request too large for ${GROQ_MODEL} on this plan.`);
-    }
-    if (res.status === 429) {
-      const secs = retryAfterSeconds(text, res) ?? attempt * 8;
-      const daily = /tokens per day|\(TPD\)/i.test(text);
-      if (daily || secs > MAX_BACKOFF_S || attempt > 4) {
-        throw new Error(
-          `Groq quota exhausted (${daily ? 'daily' : 'per-minute'} limit). ` +
-            `Retry in ${formatWait(secs)}.\n${errorMessage(text)}`
-        );
-      }
-      console.error(`Rate limited, retrying in ${Math.round(secs)}s (${attempt}/4)...`);
-      await sleep(secs * 1000 + 750);
-      return fetchFromGroq(attempt + 1);
-    }
-    throw new Error(`Groq ${res.status}: ${errorMessage(text)}`);
-  }
-
-  const message = (await res.json()).choices?.[0]?.message ?? {};
-  return {
-    headlines: parseHeadlines(message.content),
-    urls: collectUrls(message.executed_tools),
-    hosts: new Set(),
-  };
+// Importance without a model: how many independent outlets ran the story, then
+// how prominently they placed it, then how fresh it is. Corroboration is the
+// signal a single feed's ordering cannot give you, and it costs nothing.
+function scoreCluster(c, newest) {
+  const corroboration = c.sources.size * 100;
+  const prominence = Math.max(0, 30 - Math.min(...c.items.map((i) => i.pos)) * 2);
+  const freshest = Math.max(...c.items.map((i) => i.date));
+  const hoursOld = freshest ? (newest - freshest) / 3_600_000 : 48;
+  const recency = Math.max(0, 40 - hoursOld * 2);
+  return corroboration + prominence + recency;
 }
 
-// --- rate-limit hints -----------------------------------------------------
+// Cap any one outlet so a prolific feed cannot fill the page on its own.
+function selectTopStories(items) {
+  const newest = Math.max(...items.map((i) => i.date).filter(Boolean), Date.now());
+  const ranked = cluster(items)
+    .map((c) => ({ ...c, score: scoreCluster(c, newest) }))
+    .sort((a, b) => b.score - a.score);
 
-// Phrased as "try again in 7.5s" or "try again in 12m44.208s".
-function retryAfterSeconds(text, res) {
-  const m = text.match(/try again in\s+(?:(\d+)h)?(?:(\d+)m)?([\d.]+)s/i);
-  if (m) return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3]);
-  const header = Number(res.headers.get('retry-after'));
-  return Number.isFinite(header) && header > 0 ? header : null;
-}
+  const maxPerSource = Math.max(1, Math.ceil(COUNT / 2));
+  const used = new Map();
+  const picks = [];
 
-function formatWait(secs) {
-  if (secs < 60) return `${Math.ceil(secs)}s`;
-  const m = Math.floor(secs / 60);
-  return m < 60 ? `${m}m ${Math.round(secs % 60)}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
-}
-
-function errorMessage(text) {
-  try {
-    return JSON.parse(text).error?.message ?? text.slice(0, 250);
-  } catch {
-    return text.slice(0, 250);
+  for (const pass of [maxPerSource, COUNT]) {
+    for (const c of ranked) {
+      if (picks.length >= COUNT) break;
+      // Represent the cluster with its most prominently placed headline.
+      const best = c.items.slice().sort((a, b) => a.pos - b.pos)[0];
+      if (picks.includes(best)) continue;
+      const count = used.get(best.source) ?? 0;
+      if (count >= pass) continue;
+      used.set(best.source, count + 1);
+      picks.push(best);
+    }
+    if (picks.length >= COUNT) break;
   }
+
+  return picks.slice(0, COUNT);
 }
 
 // --- lead image -----------------------------------------------------------
@@ -312,28 +231,56 @@ function imagePrompt(headline) {
 }
 
 async function generateLeadImage(headline) {
-  const key = googleKey();
-  if (!key) {
-    console.error('No GEMINI_API_KEY — building without the lead image.');
-    return null;
-  }
+  const account = readKey('CF_ACCOUNT_ID');
+  const token = readKey('CF_API_TOKEN');
   try {
-    const data = await googleCall(
-      `${IMAGE_MODEL}:generateContent`,
-      key,
-      { contents: [{ role: 'user', parts: [{ text: imagePrompt(headline) }] }] },
-      IMAGE_TIMEOUT_MS
-    );
-    const part = (data.candidates?.[0]?.content?.parts ?? []).find((p) => p.inlineData?.data);
-    if (!part) throw new Error('no image data returned');
-    writeFileSync(join(ROOT, IMAGE_FILE), Buffer.from(part.inlineData.data, 'base64'));
-    console.log(`lead image -> ${IMAGE_FILE}`);
-    return IMAGE_FILE;
+    const { bytes, ext } =
+      account && token
+        ? await viaCloudflare(account, token, headline)
+        : await viaPollinations(headline);
+    const file = `lead.${ext}`;
+    writeFileSync(join(ROOT, file), bytes);
+    console.log(`lead image -> ${file} (${Math.round(bytes.length / 1024)} KB)`);
+    return file;
   } catch (err) {
     // A missing illustration should never cost you the headlines.
     console.error(`Lead image failed (${err.message}) — building without it.`);
     return null;
   }
+}
+
+async function viaCloudflare(account, token, headline) {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ prompt: imagePrompt(headline), steps: 4 }),
+      signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+    }
+  );
+  if (!res.ok) throw new Error(`Cloudflare ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  const data = await res.json();
+  const b64 = data.result?.image;
+  if (!b64) throw new Error('Cloudflare returned no image');
+  return { bytes: Buffer.from(b64, 'base64'), ext: 'png' };
+}
+
+// No key, no account. Slower and lower fidelity than Cloudflare, but it means
+// the page builds on a clean machine with nothing configured.
+async function viaPollinations(headline) {
+  const url =
+    'https://image.pollinations.ai/prompt/' +
+    encodeURIComponent(imagePrompt(headline)) +
+    '?width=1536&height=1024&nologo=true';
+  const res = await fetch(url, {
+    headers: { 'user-agent': UA },
+    signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Pollinations ${res.status}`);
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.length < 2000) throw new Error('Pollinations returned an empty image');
+  return { bytes, ext: res.headers.get('content-type')?.includes('png') ? 'png' : 'jpg' };
 }
 
 // --- render ---------------------------------------------------------------
@@ -343,7 +290,7 @@ const escape = (s) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
   );
 
-function render(headlines, at, image) {
+function render(headlines, at, image, footer) {
   const dateline = at.toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
@@ -438,7 +385,7 @@ function render(headlines, at, image) {
 ${lead}
 ${stories}
 
-    <footer class="meta">Gathered by ${escape(PROVIDER === 'google' ? GOOGLE_MODEL : GROQ_MODEL)}</footer>
+    <footer class="meta">${escape(footer)}</footer>
   </main>
 </body>
 </html>
@@ -449,18 +396,20 @@ ${stories}
 
 async function main() {
   const at = new Date();
-  const fetcher = PROVIDER === 'groq' ? fetchFromGroq : fetchFromGoogle;
-  const { headlines, urls, hosts } = await fetcher();
-  if (!headlines.length) throw new Error('no headlines came back');
 
-  const linked = await verifyLinks(headlines, { urls, hosts });
-  const image = await generateLeadImage(linked[0].title);
+  const { items, feedsUsed } = await fetchFeeds();
+  if (!items.length) throw new Error('no feed returned any stories');
+  console.log(`${items.length} stories from ${feedsUsed}/${FEEDS.length} feeds`);
+
+  const picks = selectTopStories(items);
+  if (!picks.length) throw new Error('no stories survived filtering');
+  const image = await generateLeadImage(picks[0].title);
+
+  const footer = `${feedsUsed} feeds · ranked by cross-outlet coverage`;
 
   const out = join(ROOT, 'index.html');
-  writeFileSync(out, render(linked, at, image));
-  console.log(
-    `${linked.length} headlines (${linked.filter((h) => h.url).length} linked) -> ${out}`
-  );
+  writeFileSync(out, render(picks, at, image, footer));
+  console.log(`${picks.length} headlines -> ${out}`);
 }
 
 try {

@@ -1,37 +1,59 @@
 # news
 
-A single static page of current headlines, gathered by a web-search-capable
-model, plus one conceptual illustration for the lead story.
-Black on white, centered, no rules or masthead.
+A single static page of the day's five biggest stories, plus one conceptual
+illustration for the lead. Black on white, centered, no rules or masthead.
 
 ## Use
 
 ```sh
-node build.mjs   # rewrites index.html (and lead.png)
+node build.mjs   # rewrites index.html and lead.jpg
 open index.html
 ```
 
-Keys go in `.env` (gitignored):
+No API key is required. It runs on a clean machine with nothing configured.
 
-```sh
-GEMINI_API_KEY=...   # default provider, also generates the lead image
-GROQ_API_KEY=...     # only needed for NEWS_PROVIDER=groq
-```
+## How it works
+
+**Headlines come from publisher RSS feeds**, not from a model — BBC, The
+Guardian, NPR, Al Jazeera, DW and Sky News. Titles, article URLs and publication
+names are taken verbatim from the feed, so nothing can be fabricated and every
+link points at the publisher's own page.
+
+**Ranking is by cross-outlet corroboration.** Headlines describing the same
+event are clustered by word overlap, and a cluster scores on how many
+independent outlets ran it, then how prominently they placed it, then how fresh
+it is. A story six outlets carry outranks one only a single paper ran. No outlet
+may supply more than half the page, so one prolific feed cannot crowd out the
+rest.
+
+This replaced an LLM ranking step. Both free tiers it could use were exhausted
+within a day, and corroboration turned out to be the better signal anyway — it
+is what a single feed's own ordering cannot tell you.
+
+Newsletters, opinion, sport and lifestyle are filtered out by title and URL, so
+digests like "Up First" and "First Thing" never reach the page.
+
+## The lead image
+
+One image per pull, for the top story only. The prompt asks for a flat, muted
+editorial metaphor and explicitly rules out photorealism, real faces and text —
+a photorealistic rendering of a real current event would be a fabricated news
+photo. If generation fails, the page still builds.
+
+Two providers, picked automatically:
+
+| Provider | When | Free limit |
+| --- | --- | --- |
+| Cloudflare Workers AI (FLUX.1 Schnell) | `CF_ACCOUNT_ID` + `CF_API_TOKEN` set | ~230 images/day |
+| Pollinations | otherwise | no key, no account, slower |
 
 ## Knobs
 
 | Env | Default | Notes |
 | --- | --- | --- |
-| `NEWS_PROVIDER` | `google` | or `groq` |
-| `GOOGLE_MODEL` | `gemini-3.6-flash` | search attached via the `googleSearch` tool |
-| `IMAGE_MODEL` | `gemini-3.1-flash-image` | lead illustration |
-| `GROQ_MODEL` | `openai/gpt-oss-120b` | search attached via `browser_search` |
-| `NEWS_COUNT` | `5` | headlines to request |
-| `MAX_BACKOFF_S` | `60` | fail rather than sleep longer than this on a 429 |
-
-Setting `GROQ_MODEL` to `groq/compound` or `groq/compound-mini` also works —
-those wrap the model with search already built in, so `build.mjs` drops the
-`tools` parameter for them.
+| `NEWS_COUNT` | `5` | headlines to show |
+| `FEED_TIMEOUT_MS` | `20000` | per feed; a dead feed is skipped, not fatal |
+| `IMAGE_TIMEOUT_MS` | `180000` | Pollinations can be slow |
 
 ## Scheduling
 
@@ -46,32 +68,17 @@ launchctl unload ~/Library/LaunchAgents/com.michaljach.news.plist   # stop
 It runs on load and every 7200s after. The node path is baked into the plist,
 so regenerate it after an nvm version bump.
 
-## Rate limits
+## Rate limits, for the record
 
-Both providers meter the search-grounded path separately from plain generation,
-and it is the grounded path this depends on.
+The earlier LLM-based versions kept dying on quota, and the pattern was
+consistent: every provider meters *search-grounded* generation separately from
+plain generation, and grounding is the half that runs out.
 
-- **Google free tier**: plain `generateContent` returns 200, while
-  `googleSearch` grounding and image generation both return 429. Those two
-  quotas appear to need billing enabled.
-- **Groq free tier**: 200,000 tokens/day on `openai/gpt-oss-120b`. Twelve pulls
-  a day fits comfortably; full `groq/compound` fans out enough to return
-  `413 Request Entity Too Large` before search even runs.
+- **Google AI Studio free tier**: plain `generateContent` returns 200 while
+  `googleSearch` grounding and image generation both return 429. Those need
+  billing.
+- **Groq free tier**: 200,000 tokens/day on `openai/gpt-oss-120b`. A handful of
+  search-grounded pulls exhausts it. Full `groq/compound` fans out enough to
+  return `413 Request Entity Too Large` before search even runs.
 
-`build.mjs` honours the retry hint on a 429, but fails fast rather than sleeping
-past `MAX_BACKOFF_S` or on a daily cap, so a scheduled run never hangs.
-
-## Links
-
-The model is told to copy article URLs verbatim from search results. A URL is
-kept as a link when the provider's own tool output vouches for it, or when the
-page actually resolves; 404 and 410 downgrade it to plain text. Google's
-grounding returns redirect URIs rather than article URLs, so there the check
-falls back to the publications Google actually consulted.
-
-## The lead image
-
-One image per pull, for the top story only. The prompt asks for a flat, muted
-editorial metaphor and explicitly rules out photorealism, real faces and text —
-a photorealistic rendering of a real current event would be a fabricated news
-photo. If generation fails, the page builds without it.
+RSS has no such ceiling, which is why the page now depends on it instead.
