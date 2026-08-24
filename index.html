@@ -40,7 +40,7 @@
   }
 
   .lead { margin: 0 0 clamp(1.75rem, 4.5vw, 2.75rem); }
-  .lead img { display: block; width: 100%; height: auto; }
+  .lead .art { display: block; width: 100%; height: auto; }
 
   .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
   .story h2 {
@@ -68,10 +68,48 @@
 </head>
 <body>
   <main>
-    <p class="meta dateline">Monday, August 24, 2026 &middot; 3:12 PM</p>
+    <p class="meta dateline">Monday, August 24, 2026 &middot; 3:19 PM</p>
 
     <figure class="lead">
-      <img src="lead.jpg" alt="Conceptual illustration for the lead story: Cricket legends urge Pakistan to provide &#39;proper medical care&#39; for Imran Khan">
+      <svg class="art" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Editorial illustration: A cracked stethoscope tangled in a wilted cricket bat">
+      <defs>
+        <filter id="duotone" color-interpolation-filters="sRGB">
+          <feColorMatrix type="saturate" values="0"/>
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="0.071 0.867"/>
+            <feFuncG type="table" tableValues="0.498 0.941"/>
+            <feFuncB type="table" tableValues="0.525 0.945"/>
+          </feComponentTransfer>
+        </filter>
+        <filter id="mottle" x="-30%" y="-30%" width="160%" height="160%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="74"/>
+          <feColorMatrix type="luminanceToAlpha"/>
+          <feComponentTransfer result="mask">
+            <feFuncA type="discrete" tableValues="0 0 0 1 1"/>
+          </feComponentTransfer>
+          <feFlood flood-color="#fbe4d6" result="wash"/>
+          <feComposite in="wash" in2="mask" operator="in"/>
+        </filter>
+        <filter id="grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="74"/>
+          <feColorMatrix type="saturate" values="0"/>
+        </filter>
+        <clipPath id="field"><rect x="768" y="0" width="768" height="1024"/></clipPath>
+      </defs>
+
+      <rect width="1536" height="1024" fill="#000"/>
+
+      <g clip-path="url(#field)">
+        <rect x="768" y="0" width="768" height="1024" fill="#d95f2b"/>
+        <rect x="700" y="-120" width="920" height="1280" fill="#fbe4d6" filter="url(#mottle)"/>
+      </g>
+
+      <image href="lead.jpg" x="140" y="272" width="524" height="400"
+             preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
+
+      <rect width="1536" height="1024" filter="url(#grain)" opacity="0.55"
+            style="mix-blend-mode:overlay"/>
+    </svg>
     </figure>
 
       <article class="story">

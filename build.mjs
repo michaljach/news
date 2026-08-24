@@ -215,33 +215,186 @@ function selectTopStories(items) {
 
 // --- lead image -----------------------------------------------------------
 
-// Deliberately abstract: a photorealistic rendering of a real, current news
-// event is a fabricated news photo, so the prompt asks for a flat editorial
-// metaphor and rules out photorealism, real faces and text.
-function imagePrompt(headline) {
+// Two saturated accents against pure black, rotated so consecutive pulls do not
+// look identical. Index is derived from the clock, not random, so a rebuild of
+// the same hour reproduces the same artwork.
+const PALETTES = [
+  { dark: '#2f7d32', light: '#e2f1e3', field: '#e8563f', wash: '#fbe3dc' },
+  { dark: '#2a5fc4', light: '#e4ecfc', field: '#e8a33f', wash: '#fdf0d9' },
+  { dark: '#127f86', light: '#ddf0f1', field: '#d95f2b', wash: '#fbe4d6' },
+  { dark: '#a3243c', light: '#fbe6ea', field: '#c9c93f', wash: '#f7f7dc' },
+];
+
+// Used when no model is reachable. Crude next to a generated metaphor, but it
+// keeps the artwork tied to the story instead of falling back to a generic blob.
+const MOTIFS = [
+  [/missile|strike|\bwar\b|military|troops|army|weapon|offensive|bomb|nuclear/i,
+   'two missiles rising steeply through broken cloud'],
+  [/election|vote|ballot|poll|referendum|campaign/i,
+   'a single folded ballot paper falling into a dark slot'],
+  [/tariff|trade|econom|market|bond|inflation|currency|export|bank/i,
+   'stacked shipping containers arranged like a bar chart'],
+  [/climate|flood|storm|wildfire|drought|heat|hurricane|cyclone|quake/i,
+   'a cracked dry riverbed running to the horizon'],
+  [/virus|disease|epidemic|outbreak|mpox|health|hospital|medical|vaccine/i,
+   'a blister pack of pills with one capsule missing'],
+  [/court|trial|prison|sentenc|convict|jail|judge|lawsuit|charged/i,
+   'an empty wooden chair in a shaft of hard light'],
+  [/protest|rally|strike|march|demonstrat|riot/i,
+   'a dense forest of raised bare flagpoles'],
+  [/\boil\b|petrol|\bgas\b|energy|fuel|pipeline|power grid/i,
+   'a lone oil drum casting a long hard shadow'],
+  [/satellite|rocket|space|orbit|launch/i,
+   'a satellite dish tilted up at an empty sky'],
+  [/\bai\b|chip|data|tech|software|cyber|digital|online|social media/i,
+   'a fractured circuit board lit hard from one side'],
+  [/border|migrant|refugee|asylum|deport|visa/i,
+   'a chain-link fence dissolving into open sky'],
+  [/king|queen|royal|palace|monarch|prince/i,
+   'an empty ceremonial chair beneath a tall window'],
+  [/cricket|football|olympic|tournament|match|eurovision|contest/i,
+   'a worn leather ball alone on an empty pitch'],
+  [/talks|summit|treaty|diploma|negotiat|alliance/i,
+   'two chairs facing each other across a long empty table'],
+];
+
+function fallbackConcept(headline) {
+  for (const [pattern, motif] of MOTIFS) if (pattern.test(headline)) return motif;
+  return 'a single folded newspaper lying on an empty table';
+}
+
+// One short completion turns a headline into a photographable metaphor. This is
+// plain generation, the generous half of every free tier, and it degrades to the
+// motif table rather than failing the build.
+async function conceptFor(headline) {
+  const key = readKey('GROQ_API_KEY');
+  if (!key) return fallbackConcept(headline);
+
+  const prompt =
+    `Newspaper headline: "${headline}"\n\n` +
+    'Invent one striking visual metaphor an editorial art director could photograph ' +
+    'for this story. It must be a single concrete physical object or scene. ' +
+    'No people, no faces, no text, no logos, no maps, no flags of real countries. ' +
+    'Reply with the subject only, under 15 words, no trailing punctuation.';
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: 'openai/gpt-oss-120b',
+        temperature: 0.8,
+        // gpt-oss spends completion tokens on reasoning before it writes any
+        // content, so a tight cap silently truncates the answer mid-phrase.
+        max_tokens: 700,
+        reasoning_effort: 'low',
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (!res.ok) throw new Error(`${res.status}`);
+
+    const choice = (await res.json()).choices?.[0] ?? {};
+    if (choice.finish_reason === 'length') throw new Error('concept truncated');
+    const text = choice.message?.content ?? '';
+    const concept = text.trim().replace(/^["']|["'.]+$/g, '').split('\n')[0].trim();
+    if (concept.length < 8 || concept.length > 120) throw new Error('unusable concept');
+    return concept;
+  } catch (err) {
+    console.error(`Concept step failed (${err.message}) — using motif table.`);
+    return fallbackConcept(headline);
+  }
+}
+
+// The model supplies only a clean subject photograph. Duotone, grain and the
+// block layout are applied deterministically in SVG at render time, because a
+// diffusion model will not reliably honour a compositional brief — asking for
+// one produced a soft blob with none of the intended structure.
+//
+// Treating a symbolic object as a silkscreen is what keeps this editorial
+// artwork rather than a fabricated news photo; real people and text stay out.
+function imagePrompt(concept) {
   return [
-    'Minimal conceptual editorial illustration for a serious news magazine,',
-    'in the style of The Atlantic: one clear visual metaphor, generous negative space,',
-    'a restrained muted palette of two or three colours, flat geometric shapes',
-    'with a subtle paper grain, quiet and understated.',
-    `Interpret this story abstractly rather than literally: "${headline}".`,
-    'No text, no lettering, no logos, no recognisable real people, no photorealism,',
-    'no gore, no depiction of violence.',
+    `Editorial still-life photograph of ${concept}.`,
+    'Single clear subject, centred, plain seamless studio background,',
+    'dramatic hard side lighting, deep shadows, high contrast, sharp focus,',
+    'minimal and graphic.',
+    'No text, no lettering, no numbers, no logos, no watermarks,',
+    'no people, no faces, no gore.',
   ].join(' ');
+}
+
+const channel = (hex, i) => (parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255).toFixed(3);
+
+// Duotone via luminance then a two-stop transfer table. The split between the
+// black field and the colour field is a hard vertical edge; the organic shapes
+// live inside the colour field, not on its boundary. Grain is one overlay pass
+// across the whole canvas — in `overlay` mode it leaves pure black untouched and
+// bites only on the colour field and the photograph, which is what the printed
+// reference does. All native SVG filters, so no image library is involved.
+function leadArtwork(art) {
+  const { palette, seed, label } = art;
+  const table = (i) => `${channel(palette.dark, i)} ${channel(palette.light, i)}`;
+  return `<svg class="art" viewBox="0 0 1536 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(label)}">
+      <defs>
+        <filter id="duotone" color-interpolation-filters="sRGB">
+          <feColorMatrix type="saturate" values="0"/>
+          <feComponentTransfer>
+            <feFuncR type="table" tableValues="${table(0)}"/>
+            <feFuncG type="table" tableValues="${table(1)}"/>
+            <feFuncB type="table" tableValues="${table(2)}"/>
+          </feComponentTransfer>
+        </filter>
+        <filter id="mottle" x="-30%" y="-30%" width="160%" height="160%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.0035" numOctaves="5" seed="${seed}"/>
+          <feColorMatrix type="luminanceToAlpha"/>
+          <feComponentTransfer result="mask">
+            <feFuncA type="discrete" tableValues="0 0 0 1 1"/>
+          </feComponentTransfer>
+          <feFlood flood-color="${palette.wash}" result="wash"/>
+          <feComposite in="wash" in2="mask" operator="in"/>
+        </filter>
+        <filter id="grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="3" stitchTiles="stitch" seed="${seed}"/>
+          <feColorMatrix type="saturate" values="0"/>
+        </filter>
+        <clipPath id="field"><rect x="768" y="0" width="768" height="1024"/></clipPath>
+      </defs>
+
+      <rect width="1536" height="1024" fill="#000"/>
+
+      <g clip-path="url(#field)">
+        <rect x="768" y="0" width="768" height="1024" fill="${palette.field}"/>
+        <rect x="700" y="-120" width="920" height="1280" fill="${palette.wash}" filter="url(#mottle)"/>
+      </g>
+
+      <image href="${art.file}" x="140" y="272" width="524" height="400"
+             preserveAspectRatio="xMidYMid slice" filter="url(#duotone)"/>
+
+      <rect width="1536" height="1024" filter="url(#grain)" opacity="0.55"
+            style="mix-blend-mode:overlay"/>
+    </svg>`;
 }
 
 async function generateLeadImage(headline) {
   const account = readKey('CF_ACCOUNT_ID');
   const token = readKey('CF_API_TOKEN');
+
+  const concept = await conceptFor(headline);
+  const slot = Math.floor(Date.now() / 7_200_000);
+  const palette = PALETTES[slot % PALETTES.length];
+  const prompt = imagePrompt(concept);
+  console.log(`lead concept: ${concept}`);
+
   try {
     const { bytes, ext } =
       account && token
-        ? await viaCloudflare(account, token, headline)
-        : await viaPollinations(headline);
+        ? await viaCloudflare(account, token, prompt)
+        : await viaPollinations(prompt);
     const file = `lead.${ext}`;
     writeFileSync(join(ROOT, file), bytes);
     console.log(`lead image -> ${file} (${Math.round(bytes.length / 1024)} KB)`);
-    return file;
+    return { file, palette, seed: slot % 100, label: `Editorial illustration: ${concept}` };
   } catch (err) {
     // A missing illustration should never cost you the headlines.
     console.error(`Lead image failed (${err.message}) — building without it.`);
@@ -249,13 +402,13 @@ async function generateLeadImage(headline) {
   }
 }
 
-async function viaCloudflare(account, token, headline) {
+async function viaCloudflare(account, token, prompt) {
   const res = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${account}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ prompt: imagePrompt(headline), steps: 4 }),
+      body: JSON.stringify({ prompt, steps: 4 }),
       signal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
     }
   );
@@ -268,10 +421,10 @@ async function viaCloudflare(account, token, headline) {
 
 // No key, no account. Slower and lower fidelity than Cloudflare, but it means
 // the page builds on a clean machine with nothing configured.
-async function viaPollinations(headline) {
+async function viaPollinations(prompt) {
   const url =
     'https://image.pollinations.ai/prompt/' +
-    encodeURIComponent(imagePrompt(headline)) +
+    encodeURIComponent(prompt) +
     '?width=1536&height=1024&nologo=true';
   const res = await fetch(url, {
     headers: { 'user-agent': UA },
@@ -290,15 +443,13 @@ const escape = (s) =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
   );
 
-function render(headlines, at, image, footer) {
+function render(headlines, at, art, footer) {
   const dateline = at.toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
   const time = at.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 
-  const lead = image
-    ? `    <figure class="lead">\n      <img src="${escape(image)}" alt="Conceptual illustration for the lead story: ${escape(headlines[0].title)}">\n    </figure>\n`
-    : '';
+  const lead = art ? `    <figure class="lead">\n      ${leadArtwork(art)}\n    </figure>\n` : '';
 
   const stories = headlines
     .map(({ title, source, url }) => {
@@ -352,7 +503,7 @@ function render(headlines, at, image, footer) {
   }
 
   .lead { margin: 0 0 clamp(1.75rem, 4.5vw, 2.75rem); }
-  .lead img { display: block; width: 100%; height: auto; }
+  .lead .art { display: block; width: 100%; height: auto; }
 
   .story { padding: clamp(1.4rem, 3.5vw, 2rem) 0; text-align: center; }
   .story h2 {
@@ -403,12 +554,12 @@ async function main() {
 
   const picks = selectTopStories(items);
   if (!picks.length) throw new Error('no stories survived filtering');
-  const image = await generateLeadImage(picks[0].title);
+  const art = await generateLeadImage(picks[0].title);
 
   const footer = `${feedsUsed} feeds · ranked by cross-outlet coverage`;
 
   const out = join(ROOT, 'index.html');
-  writeFileSync(out, render(picks, at, image, footer));
+  writeFileSync(out, render(picks, at, art, footer));
   console.log(`${picks.length} headlines -> ${out}`);
 }
 

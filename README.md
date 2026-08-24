@@ -35,17 +35,38 @@ digests like "Up First" and "First Thing" never reach the page.
 
 ## The lead image
 
-One image per pull, for the top story only. The prompt asks for a flat, muted
-editorial metaphor and explicitly rules out photorealism, real faces and text —
-a photorealistic rendering of a real current event would be a fabricated news
-photo. If generation fails, the page still builds.
+One artwork per pull, for the top story only, in a duotone editorial style:
+a small duotone photographic panel floating in flat black negative space, beside
+a full-bleed grainy colour field with torn organic shapes.
 
-Two providers, picked automatically:
+It is built in two stages, because a diffusion model will not reliably honour a
+compositional brief — asking one for the whole layout returned a soft blob with
+none of the intended structure.
 
-| Provider | When | Free limit |
+1. **Concept.** A short model call turns the lead headline into a photographable
+   metaphor: "children make up half of mpox cases" becomes a blister pack with
+   one capsule missing. If no model is reachable, a keyword motif table supplies
+   one instead, so the artwork still relates to the story.
+2. **Subject photo.** The image model renders only that object — single subject,
+   plain background, hard side lighting.
+3. **Composition.** Duotone mapping, film grain, the hard vertical split and the
+   organic colour field are applied deterministically with native SVG filters at
+   render time. No image library, and the layout is identical every run.
+
+The palette rotates through four pairs on a two-hour slot, so consecutive pulls
+do not look alike but a rebuild of the same hour reproduces the same artwork.
+
+Treating a symbolic object as a silkscreen is what keeps this editorial artwork
+rather than a fabricated news photo. The prompt rules out real people, faces,
+text and gore. If generation fails, the page still builds without it.
+
+| Image provider | When | Free limit |
 | --- | --- | --- |
 | Cloudflare Workers AI (FLUX.1 Schnell) | `CF_ACCOUNT_ID` + `CF_API_TOKEN` set | ~230 images/day |
 | Pollinations | otherwise | no key, no account, slower |
+
+The concept step uses `GROQ_API_KEY` if present and silently falls back to the
+motif table when the free tier is exhausted.
 
 ## Knobs
 
